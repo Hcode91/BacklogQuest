@@ -3,7 +3,9 @@ package com.backlogquest.app.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
@@ -26,11 +29,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +52,7 @@ import kotlinx.coroutines.delay
 enum class Tab(val icon: String, val label: String) {
     PLAY("▶", "PLAY"),
     GAMES("≡", "GAMES"),
+    DISCOVER("◎", "DISCOVER"),
     TROPHIES("★", "TROPHY"),
     STATS("▦", "STATS"),
     SETUP("⚙", "SETUP"),
@@ -75,6 +82,9 @@ fun BacklogApp(vm: BacklogViewModel) {
     val filters = remember { Filters() }
     var editing by remember { mutableStateOf<EditTarget?>(null) }
     var wishOpen by remember { mutableStateOf<String?>(null) }
+    // Kept here, above the tabs, so Discover remembers where you were when you come back to it.
+    val discoverNav = rememberSaveable(saver = DiscoverNav.Saver) { DiscoverNav() }
+    val discoverSaved = rememberSaveableStateHolder()
 
     BackHandler(enabled = tab != Tab.PLAY) { tab = Tab.PLAY }
 
@@ -94,6 +104,7 @@ fun BacklogApp(vm: BacklogViewModel) {
                         onEditHistory = { editing = EditTarget.History(it) },
                         onOpenWish = { wishOpen = it },
                     )
+                    Tab.DISCOVER -> DiscoverScreen(discoverNav, discoverSaved, toast = { vm.toast = it })
                     Tab.TROPHIES -> TrophiesScreen(vm)
                     Tab.STATS -> StatsScreen(vm)
                     Tab.SETUP -> SetupScreen(vm)
@@ -109,39 +120,75 @@ fun BacklogApp(vm: BacklogViewModel) {
     SessionDialog(vm)
 }
 
+/** Narrowest a tab gets before the bar starts scrolling sideways instead of squeezing. */
+private val MinTabWidth = 76.dp
+
+/**
+ * The tab bar. On a wide screen the tabs share the width evenly; on a phone they keep a
+ * comfortable size and the bar scrolls sideways, following whichever tab is selected.
+ */
 @Composable
 private fun BottomNav(current: Tab, onSelect: (Tab) -> Unit) {
     Column(Modifier.fillMaxWidth().background(BQ.Shell2)) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(BQ.Edge))
-        Row(
+        BoxWithConstraints(
             Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
         ) {
-            Tab.entries.forEach { t ->
-                val on = t == current
-                Surface(
-                    onClick = { onSelect(t) },
-                    color = Color.Transparent,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Column(
-                        Modifier.padding(vertical = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+            val tabs = Tab.entries
+            val tabWidth = maxOf(maxWidth / tabs.size, MinTabWidth)
+            val scroll = rememberScrollState()
+            val tabPx = with(LocalDensity.current) { tabWidth.roundToPx() }
+            val barPx = constraints.maxWidth
+            // Keep the selected tab in view (centred when there's room), e.g. after pressing Back.
+            LaunchedEffect(current, tabPx, barPx) {
+                scroll.animateScrollTo((current.ordinal * tabPx - (barPx - tabPx) / 2).coerceAtLeast(0))
+            }
+            Row(Modifier.horizontalScroll(scroll)) {
+                tabs.forEach { t ->
+                    val on = t == current
+                    Surface(
+                        onClick = { onSelect(t) },
+                        color = Color.Transparent,
+                        modifier = Modifier.width(tabWidth),
                     ) {
-                        Box(
-                            Modifier.size(30.dp).clip(CircleShape).background(if (on) BQ.A else BQ.Edge),
-                            contentAlignment = Alignment.Center,
+                        Column(
+                            Modifier.padding(vertical = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text(t.icon, color = if (on) Color.White else BQ.Ink, fontSize = 13.sp)
+                            Box(
+                                Modifier.size(30.dp).clip(CircleShape).background(if (on) BQ.A else BQ.Edge),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(t.icon, color = if (on) Color.White else BQ.Ink, fontSize = 13.sp)
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                t.label, color = if (on) BQ.Ink else BQ.Muted,
+                                fontFamily = BQ.Mono, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                            )
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            t.label, color = if (on) BQ.Ink else BQ.Muted,
-                            fontFamily = BQ.Mono, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                        )
                     }
                 }
             }
+            // A fade and an arrow on whichever side still has tabs out of view.
+            if (scroll.canScrollBackward) MoreTabsHint(toEnd = false, Modifier.align(Alignment.CenterStart))
+            if (scroll.canScrollForward) MoreTabsHint(toEnd = true, Modifier.align(Alignment.CenterEnd))
         }
+    }
+}
+
+@Composable
+private fun MoreTabsHint(toEnd: Boolean, modifier: Modifier) {
+    val fade = listOf(Color.Transparent, BQ.Shell2)
+    Box(
+        modifier
+            .width(26.dp)
+            .height(56.dp)
+            .background(Brush.horizontalGradient(if (toEnd) fade else fade.reversed())),
+        contentAlignment = if (toEnd) Alignment.CenterEnd else Alignment.CenterStart,
+    ) {
+        Text(if (toEnd) "›" else "‹", color = BQ.B, fontFamily = BQ.Mono, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
 }
 
