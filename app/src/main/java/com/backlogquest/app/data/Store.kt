@@ -62,6 +62,17 @@ object Store {
         o.put("histCovers", JSONObject().apply { s.histCovers.forEach { (k, v) -> put(k, v) } })
         o.put("notFound", JSONArray().apply { s.notFound.forEach { put(it) } })
         o.put("psnId", s.psnId)
+        o.put("emulators", JSONArray().apply {
+            s.emulators.forEach { e ->
+                put(
+                    JSONObject().put("id", e.id).put("name", e.name).put("repo", e.repo).put("pkg", e.pkg)
+                        .put("version", e.version).put("where", e.where).put("prerelease", e.prerelease)
+                        .put("assetHint", e.assetHint).put("latest", e.latest).put("latestName", e.latestName)
+                        .put("latestUrl", e.latestUrl).put("latestAt", e.latestAt).put("checkedAt", e.checkedAt)
+                        .put("checkError", e.checkError),
+                )
+            }
+        })
         o.put("prices", JSONObject().apply {
             s.prices.forEach { (k, p) ->
                 put(k, JSONObject().put("amount", p.amount).put("regular", p.regular).put("cut", p.cut)
@@ -104,6 +115,17 @@ object Store {
                 } ?: emptyMap(),
                 notFound = o.optJSONArray("notFound")?.let { a -> (0 until a.length()).map { a.strAt(it) }.toSet() } ?: emptySet(),
                 psnId = o.str("psnId"),
+                emulators = o.optJSONArray("emulators")?.let { a ->
+                    (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { e ->
+                        EmuEntry(
+                            id = e.str("id").ifBlank { newId() }, name = e.str("name"), repo = e.str("repo"),
+                            pkg = e.str("pkg"), version = e.str("version"), where = e.str("where"),
+                            prerelease = e.optBoolean("prerelease"), assetHint = e.str("assetHint"),
+                            latest = e.str("latest"), latestName = e.str("latestName"), latestUrl = e.str("latestUrl"),
+                            latestAt = e.str("latestAt"), checkedAt = e.str("checkedAt"), checkError = e.str("checkError"),
+                        )
+                    }
+                } ?: emptyList(),
                 prices = o.optJSONObject("prices")?.let { po ->
                     po.keys().asSequence().mapNotNull { k ->
                         val p = po.optJSONObject(k) ?: return@mapNotNull null

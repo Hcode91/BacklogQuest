@@ -62,6 +62,7 @@ enum class Tab(val icon: String, val label: String) {
     SPIN("◔", "SPIN"),
     GAMES("≡", "GAMES"),
     DISCOVER("◎", "DISCOVER"),
+    EMULATORS("◫", "EMULATORS"),
     PROFILE("★", "PROFILE"),
     SETUP("⚙", "SETUP"),
 }
@@ -155,6 +156,7 @@ fun BacklogApp(vm: BacklogViewModel) {
                         discoverNav, discoverSaved, toast = { vm.toast = it }, onAddToBacklog = addFromDiscover,
                         bq = vm, onOpenWish = { wishOpen = it },
                     )
+                    Tab.EMULATORS -> EmulatorsScreen(vm)
                     Tab.PROFILE -> ProfileScreen(vm)
                     Tab.SETUP -> SetupScreen(vm)
                 }
