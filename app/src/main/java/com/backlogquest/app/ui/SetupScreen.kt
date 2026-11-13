@@ -2,7 +2,12 @@ package com.backlogquest.app.ui
 
 import android.webkit.CookieManager
 import android.webkit.WebStorage
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -19,9 +25,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,6 +39,18 @@ import com.backlogquest.app.data.Device
 import com.backlogquest.app.data.GameStore
 import com.backlogquest.app.data.fmtDate
 import com.backlogquest.app.data.newId
+
+private val SETUP_TILES = listOf(
+    Triple("data", "YOUR DATA", "Where your history, wishlist and catalog come from"),
+    Triple("file", "GAMES FROM THE FILE", "Replace your games with the ones in the data file"),
+    Triple("count", "EXTRA COUNT", "Completions missing from your history"),
+    Triple("autofill", "AUTO-FILL", "Box art, genre and length for new games"),
+    Triple("playtime", "PLAY TIME", "Measure sessions and read hours from Steam"),
+    Triple("achievements", "ACHIEVEMENTS", "Steam and RetroAchievements details"),
+    Triple("prices", "PRICES", "Wishlist prices from IsThereAnyDeal"),
+    Triple("stores", "IMPORT FROM STORES", "Bring in your libraries"),
+    Triple("devices", "DEVICES", "What you play on, and the two-for-two rule"),
+)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -47,16 +67,40 @@ fun SetupScreen(vm: BacklogViewModel) {
     var steamProfileText by remember { mutableStateOf(s.steamProfile) }
     var newDevice by remember { mutableStateOf("") }
     var confirmReplace by remember { mutableStateOf(false) }
+    // Which part of Setup is open; null shows the tiles.
+    var open by rememberSaveable { mutableStateOf<String?>(null) }
+    BackHandler(enabled = open != null) { open = null }
 
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { StatusPanel(vm) }
-        item { SectionTitle("SETUP") }
+        if (open == null) {
+            item { StatusPanel(vm) }
+            item { SectionTitle("SETUP") }
+            // Two tiles per row; tap one to open that part of Setup.
+            items(SETUP_TILES.chunked(2)) { pair ->
+                Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    pair.forEach { (key, title, about) ->
+                        Tile(Modifier.weight(1f).fillMaxHeight(), onClick = { open = key }) {
+                            Text(title, color = BQ.Ink, fontFamily = BQ.Mono, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(about, color = BQ.Muted, fontSize = 12.sp)
+                        }
+                    }
+                    if (pair.size == 1) Box(Modifier.weight(1f))
+                }
+            }
+        } else {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PixelButton("◀ BACK") { open = null }
+                    SectionTitle("SETUP")
+                }
+            }
+        }
 
-        item {
+        if (open == "data") item {
             Panel {
                 SectionTitle("YOUR DATA")
                 Hint(
@@ -92,7 +136,7 @@ fun SetupScreen(vm: BacklogViewModel) {
             }
         }
 
-        item {
+        if (open == "file") item {
             Panel {
                 SectionTitle("YOUR GAMES FROM THE FILE")
                 Hint(
@@ -116,7 +160,7 @@ fun SetupScreen(vm: BacklogViewModel) {
             }
         }
 
-        item {
+        if (open == "count") item {
             Panel {
                 OutlinedTextField(
                     value = baselineText,
@@ -137,7 +181,7 @@ fun SetupScreen(vm: BacklogViewModel) {
             }
         }
 
-        item {
+        if (open == "autofill") item {
             Panel {
                 SectionTitle("AUTO-FILL")
                 Hint(
@@ -159,7 +203,7 @@ fun SetupScreen(vm: BacklogViewModel) {
             }
         }
 
-        item {
+        if (open == "playtime") item {
             Panel {
                 SectionTitle("PLAY TIME")
                 val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -193,7 +237,7 @@ fun SetupScreen(vm: BacklogViewModel) {
             }
         }
 
-        item {
+        if (open == "achievements") item {
             Panel {
                 SectionTitle("ACHIEVEMENTS")
                 Hint(
@@ -236,7 +280,7 @@ fun SetupScreen(vm: BacklogViewModel) {
             }
         }
 
-        item {
+        if (open == "prices") item {
             Panel {
                 SectionTitle("PRICES")
                 Hint(
@@ -254,7 +298,7 @@ fun SetupScreen(vm: BacklogViewModel) {
             }
         }
 
-        item {
+        if (open == "stores") item {
             Panel {
                 SectionTitle("IMPORT FROM STORES")
                 Hint(
@@ -273,7 +317,7 @@ fun SetupScreen(vm: BacklogViewModel) {
             }
         }
 
-        item {
+        if (open == "devices") item {
             Panel {
                 SectionTitle("DEVICES")
                 Hint("Exempt devices never go on cooldown and don't count toward the two-for-two rule.")

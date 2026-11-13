@@ -129,7 +129,12 @@ class DiscoverNav(start: List<String> = listOf(HOME)) {
  * This is the RetroShelf app, merged in and dressed in the Backlog Quest look.
  */
 @Composable
-fun DiscoverScreen(nav: DiscoverNav, saved: SaveableStateHolder, toast: (String) -> Unit) {
+fun DiscoverScreen(
+    nav: DiscoverNav,
+    saved: SaveableStateHolder,
+    toast: (String) -> Unit,
+    onAddToBacklog: (Game) -> Unit,
+) {
     // Created the first time the tab is opened, then kept for as long as the app is open.
     val vm: ShelfViewModel = viewModel()
     LaunchedEffect(vm) { vm.messages.collect { toast(it) } }
@@ -154,7 +159,7 @@ fun DiscoverScreen(nav: DiscoverNav, saved: SaveableStateHolder, toast: (String)
                             val (console, provider) = place.removePrefix("catalogue/").split("/", limit = 2)
                             CatalogueScreen(console, provider, vm, nav)
                         }
-                        place.startsWith("game/") -> DetailsScreen(place.removePrefix("game/"), vm)
+                        place.startsWith("game/") -> DetailsScreen(place.removePrefix("game/"), vm, onAddToBacklog)
                     }
                 }
             }
@@ -422,7 +427,7 @@ private fun SavedScreen(vm: ShelfViewModel, nav: DiscoverNav) {
 // ───────────────────────── Game details ─────────────────────────
 
 @Composable
-private fun DetailsScreen(id: String, vm: ShelfViewModel) {
+private fun DetailsScreen(id: String, vm: ShelfViewModel, onAddToBacklog: (Game) -> Unit) {
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     var detailsLoading by remember(id) { mutableStateOf(false) }
     var detailRefresh by remember(id) { mutableIntStateOf(0) }
@@ -467,6 +472,7 @@ private fun DetailsScreen(id: String, vm: ShelfViewModel) {
                 if (source.refreshDetails) PixelButton("↻ REFRESH", enabled = !detailsLoading) { detailRefresh++ }
             }
         }
+        item { PixelButton("+ ADD TO BACKLOG", Modifier.fillMaxWidth(), kind = BtnKind.B) { onAddToBacklog(g) } }
         item {
             Hint(
                 listOfNotNull(

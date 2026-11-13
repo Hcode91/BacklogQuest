@@ -158,11 +158,11 @@ fun GamesScreen(
         { GridItemSpan(maxLineSpan) }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(100.dp),
+        columns = GridCells.Adaptive(104.dp),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item(span = full) { StatusPanel(vm) }
         item(span = full) {
@@ -314,18 +314,20 @@ private fun GridCard(
     meta: String,
     onClick: (() -> Unit)?,
 ) {
-    val base = Modifier.fillMaxWidth()
-    Column(
-        if (onClick != null) base.clickable(onClick = onClick) else base,
-        verticalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
+    // A framed tile, the same shape as the ones in Discover.
+    Tile(Modifier.fillMaxWidth(), onClick = onClick, padding = 0.dp) {
         Cover(title, label, cover, Modifier.fillMaxWidth(), badge = badge)
-        Text(
-            title, color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp, lineHeight = 16.sp,
-            maxLines = 2, overflow = TextOverflow.Ellipsis,
-        )
-        if (meta.isNotBlank()) {
-            Text(meta, color = BQ.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(
+            Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                title, color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp, lineHeight = 16.sp,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            if (meta.isNotBlank()) {
+                Text(meta, color = BQ.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }

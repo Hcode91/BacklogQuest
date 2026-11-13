@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.*
 
 @Entity(tableName = "games")
 data class StoredGame(@PrimaryKey val id: String, val provider: String, val json: String, val favorite: Boolean = false, val viewed: Long = 0, val cachedAt: Long = 0)
+data class ProviderCount(val provider: String, val games: Int)
 @Entity(tableName = "catalogue_snapshots")
 data class CatalogueSnapshot(@PrimaryKey val provider: String, val fetchedAt: Long, val nextPage: Int? = null, val total: Int? = null)
 @Entity(tableName = "downloads")
@@ -18,6 +19,10 @@ interface ShelfDao {
     @Query("SELECT * FROM games WHERE favorite = 1 OR viewed > 0") suspend fun retained(): List<StoredGame>
     @Query("SELECT * FROM games WHERE provider = :provider AND cachedAt > 0") suspend fun catalogue(provider: String): List<StoredGame>
     @Query("SELECT * FROM games WHERE id = :id") suspend fun game(id: String): StoredGame?
+    /** How many saved catalogue games each source has, for the Spin tab. */
+    @Query("SELECT provider, COUNT(*) AS games FROM games WHERE cachedAt > 0 GROUP BY provider") suspend fun cachedCounts(): List<ProviderCount>
+    /** Up to [limit] saved catalogue games from the given sources, in random order. */
+    @Query("SELECT * FROM games WHERE cachedAt > 0 AND provider IN (:providers) ORDER BY RANDOM() LIMIT :limit") suspend fun randomCached(providers: List<String>, limit: Int): List<StoredGame>
     @Upsert suspend fun put(game: StoredGame)
     @Query("UPDATE games SET favorite = :favorite WHERE id = :id") suspend fun favorite(id: String, favorite: Boolean)
     @Query("SELECT * FROM games WHERE favorite = 1 ORDER BY id") fun favorites(): Flow<List<StoredGame>>

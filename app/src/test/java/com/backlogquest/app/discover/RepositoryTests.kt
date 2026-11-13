@@ -13,6 +13,8 @@ private class MemoryDao : ShelfDao {
     override suspend fun putSnapshot(snapshot: CatalogueSnapshot) { snapshots[snapshot.provider] = snapshot }
     override suspend fun clearSnapshots() { snapshots.clear() }
     override suspend fun retained() = games.value.values.filter { it.favorite || it.viewed > 0 }
+    override suspend fun cachedCounts() = games.value.values.filter { it.cachedAt > 0 }.groupBy { it.provider }.map { ProviderCount(it.key, it.value.size) }
+    override suspend fun randomCached(providers: List<String>, limit: Int) = games.value.values.filter { it.cachedAt > 0 && it.provider in providers }.shuffled().take(limit)
     private val downloads = MutableStateFlow(mapOf<Long, DownloadRecord>())
     override suspend fun catalogue(provider: String) = games.value.values.filter { it.provider == provider && it.cachedAt > 0 }
     override suspend fun game(id: String) = games.value[id]

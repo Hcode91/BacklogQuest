@@ -150,6 +150,60 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ---------------- Achievement totals ----------------
+
+    var achBusy by mutableStateOf(false)
+        private set
+    var achMessage by mutableStateOf("")
+        private set
+
+    /**
+     * Reads how many achievements you've earned across your whole Steam and
+     * RetroAchievements accounts. [quiet] is the once-a-day check when the app opens.
+     */
+    fun refreshAchievementTotals(quiet: Boolean = false) {
+        if (achBusy) return
+        val s = state
+        val steam = AchievementTotals.canReadSteam(s)
+        val retro = AchievementTotals.canReadRetro(s)
+        if (!steam && !retro) {
+            if (!quiet) achMessage = "Add your Steam or RetroAchievements details in Setup → Achievements first."
+            return
+        }
+        achBusy = true
+        if (!quiet) achMessage = "Counting your achievements…"
+        viewModelScope.launch {
+            val found = mutableMapOf<String, Int>()
+            val problems = mutableListOf<String>()
+            if (retro) {
+                try {
+                    found[Achievements.RA] = AchievementTotals.retro(s)
+                } catch (e: AchievementTotals.TotalsError) {
+                    problems += e.message ?: "RetroAchievements couldn't be reached."
+                } catch (e: Exception) {
+                    problems += "RetroAchievements couldn't be reached."
+                }
+            }
+            if (steam) {
+                try {
+                    found[Achievements.STEAM] = AchievementTotals.steam(s, File(dir, "steam-achievements.json")) { m ->
+                        if (!quiet) viewModelScope.launch { achMessage = m }
+                    }
+                } catch (e: AchievementTotals.TotalsError) {
+                    problems += e.message ?: "Steam couldn't be reached."
+                } catch (e: Exception) {
+                    problems += "Steam couldn't be reached."
+                }
+            }
+            if (found.isNotEmpty()) update { it.copy(achTotals = it.achTotals + found, achTotalsAt = today()) }
+            if (!quiet || found.isNotEmpty()) {
+                achMessage = (listOfNotNull("Updated ${fmtDate(today())}.".takeIf { found.isNotEmpty() }) + problems)
+                    .joinToString(" ")
+            }
+            achBusy = false
+        }
+    }
+
     /** Adds a home-screen icon that starts the game straight away. */
     fun addHomeIcon(gameId: String) {
         val g = state.games.firstOrNull { it.id == gameId } ?: return
@@ -171,6 +225,8 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
             }
             loaded = true
             pendingPlay?.let { pendingPlay = null; play(it) }
+            // Once a day, quietly bring the account-wide achievement count up to date.
+            if (state.achTotalsAt != today()) refreshAchievementTotals(quiet = true)
             // First time on this phone: fetch your data straight away.
             if (file == null) sync()
         }
