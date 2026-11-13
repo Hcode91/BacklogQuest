@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import com.backlogquest.app.data.BacklogViewModel
 import com.backlogquest.app.data.Shortcuts
+import com.backlogquest.app.data.WebImport
 import com.backlogquest.app.ui.BacklogApp
 import com.backlogquest.app.ui.BacklogTheme
 
@@ -28,12 +29,25 @@ class MainActivity : ComponentActivity() {
                 BacklogApp(vm)
             }
         }
-        if (savedInstanceState == null) handlePlay(intent)
+        if (savedInstanceState == null) {
+            handlePlay(intent)
+            handleShare(intent)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handlePlay(intent)
+        handleShare(intent)
+    }
+
+    /** A page was shared from a browser: offer to add its games to the wishlist. */
+    private fun handleShare(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_SEND) return
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+        intent.action = Intent.ACTION_MAIN
+        val url = WebImport.firstUrl(text)
+        if (url == null) vm.showToast("NO LINK FOUND\nShare a web page to add its games") else vm.webImport = url
     }
 
     override fun onResume() {

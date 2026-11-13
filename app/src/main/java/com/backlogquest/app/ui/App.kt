@@ -161,6 +161,8 @@ fun BacklogApp(vm: BacklogViewModel) {
 
     editing?.let { target -> EditSheet(vm, target, onDismiss = { editing = null }) }
     wishOpen?.let { id -> WishSheet(vm, id, onDismiss = { wishOpen = null }) }
+    // Opened from Games → Wishlist, or by sharing a page to the app from a browser.
+    vm.webImport?.let { address -> WebImportSheet(vm, address, onDismiss = { vm.webImport = null }) }
     SessionDialog(vm)
 }
 

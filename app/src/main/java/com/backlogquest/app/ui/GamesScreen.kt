@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -134,6 +136,7 @@ private fun buildList(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GamesScreen(
     vm: BacklogViewModel,
@@ -211,8 +214,12 @@ fun GamesScreen(
                             }
                         }
                         // Your own lists: add CSV files, then fetch a picture for each game from its link.
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             PixelButton("IMPORT CSV") { importOpen = true }
+                            PixelButton("IMPORT FROM WEB") { vm.webImport = "" }
                             if (vm.imageBusy) {
                                 PixelButton("STOP", kind = BtnKind.A) { vm.stopImages() }
                             } else if (needPictures.isNotEmpty()) {

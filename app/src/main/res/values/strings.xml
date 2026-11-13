@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Backlog Quest</string>
+    <string name="share_to_wishlist">Add to wishlist</string>
 </resources>
