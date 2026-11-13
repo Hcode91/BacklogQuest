@@ -21,6 +21,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -166,6 +170,7 @@ fun BacklogApp(vm: BacklogViewModel) {
     vm.webImport?.let { address -> WebImportSheet(vm, address, onDismiss = { vm.webImport = null }) }
     if (vm.csvImportOpen) CsvImportSheet(vm) { vm.csvImportOpen = false }
     if (vm.duplicatesOpen) DuplicatesSheet(vm) { vm.duplicatesOpen = false }
+    vm.lastCrash?.let { details -> CrashDialog(details, onDone = vm::dismissCrash) }
     SessionDialog(vm)
 }
 
@@ -239,6 +244,33 @@ private fun MoreTabsHint(toEnd: Boolean, modifier: Modifier) {
     ) {
         Text(if (toEnd) "›" else "‹", color = BQ.B, fontFamily = BQ.Mono, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
+}
+
+/** "The app closed unexpectedly last time", with the reason and a button to copy it. */
+@Composable
+private fun CrashDialog(details: String, onDone: () -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    val reason = details.lineSequence().dropWhile { it.isNotBlank() }.firstOrNull { it.isNotBlank() }.orEmpty()
+    AlertDialog(
+        onDismissRequest = onDone,
+        containerColor = BQ.Shell2,
+        titleContentColor = BQ.Ink,
+        textContentColor = BQ.Muted,
+        title = { Text("Backlog Quest closed unexpectedly", fontFamily = BQ.Mono, fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Last time the app was open, it crashed. Copy the details and send them to Claude so it can be fixed.")
+                Text(reason, color = BQ.Ink, fontFamily = BQ.Mono, fontSize = 12.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            }
+        },
+        confirmButton = {
+            PixelButton("COPY DETAILS", kind = BtnKind.B) {
+                clipboard.setText(AnnotatedString(details))
+                onDone()
+            }
+        },
+        dismissButton = { PixelButton("DISMISS", onClick = onDone) },
+    )
 }
 
 @Composable

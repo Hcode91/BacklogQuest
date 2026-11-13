@@ -196,14 +196,49 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
     /** The picture for a wishlist game, or "" when there isn't one (yet). */
     fun wishImage(id: String): String = wishImages[id].orEmpty().takeIf { it != WishImport.NO_IMAGE }.orEmpty()
 
+    private var refJob: Job? = null
+
+    /**
+     * Puts the wishlist back together after imported lists change. With big lists
+     * that takes a moment, so it's done in the background; a newer change cancels
+     * an older one that hasn't finished.
+     */
     private fun rebuildRef() {
-        ref = RefData(fileRef.history, WishImport.wishItems(csvLists) + fileRef.wishlist, fileRef.exportedAt)
+        val lists = csvLists
+        val file = fileRef
+        refJob?.cancel()
+        refJob = viewModelScope.launch {
+            val items = withContext(Dispatchers.Default) { WishImport.wishItems(lists) + file.wishlist }
+            ref = RefData(file.history, items, file.exportedAt)
+        }
+    }
+
+    /** Saves happen one at a time, in the order they were asked for. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val saver = Dispatchers.IO.limitedParallelism(1)
+
+    private fun saveLists() {
+        val lists = csvLists
+        viewModelScope.launch(saver) { WishImport.saveLists(dir, lists) }
+    }
+
+    private fun saveImages() {
+        val images = wishImages.toMap()
+        viewModelScope.launch(saver) { WishImport.saveImages(dir, images) }
     }
 
     private fun saveImports() {
-        val lists = csvLists
-        val images = wishImages.toMap()
-        viewModelScope.launch(Dispatchers.IO) { synchronized(wishImages) { WishImport.save(dir, lists, images) } }
+        saveLists()
+        saveImages()
+    }
+
+    /** What went wrong the last time the app closed unexpectedly, if it did. */
+    var lastCrash by mutableStateOf<String?>(null)
+        private set
+
+    fun dismissCrash() {
+        lastCrash = null
+        viewModelScope.launch(Dispatchers.IO) { CrashLog.clear(dir) }
     }
 
     fun importCsv(lists: List<CsvList>) {
@@ -249,8 +284,10 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
     /** Looks up a picture for each of [ids] from that game's link, one at a time. */
     fun fetchWishImages(ids: List<String>, again: Boolean = false) {
         if (imageBusy) return
-        val byId = ref.wishlist.filter { it.imported }.associateBy { it.id }
-        val todo = ids.mapNotNull { byId[it] }.filter { it.url.isNotBlank() && (again || it.id !in wishImages) }
+        // Looked up in the lists themselves, which are up to date even while the wishlist is being rebuilt.
+        val byId = HashMap<String, CsvGame>()
+        csvLists.forEach { l -> l.games.forEach { byId.putIfAbsent(it.id, it) } }
+        val todo = ids.distinct().mapNotNull { byId[it] }.filter { it.url.isNotBlank() && (again || it.id !in wishImages) }
         if (todo.isEmpty()) {
             imageMessage = "Nothing to fetch: these games already have a picture or have no link."
             return
@@ -273,14 +310,14 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
                         stoppedEarly = true
                         break
                     }
-                    if ((i + 1) % 10 == 0) saveImports()
+                    if ((i + 1) % 25 == 0) saveImages()
                     // A short pause between pages, to go easy on the site.
                     delay(600)
                 }
                 imageMessage = "Found $found picture${if (found == 1) "" else "s"}." +
                     if (stoppedEarly) " The site stopped answering, so try again later for the rest." else ""
             } finally {
-                saveImports()
+                saveImages()
                 imageBusy = false
             }
         }
@@ -377,7 +414,11 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
             val (lists, images) = withContext(Dispatchers.IO) { WishImport.load(dir) }
             csvLists = lists
             wishImages.putAll(images)
-            rebuildRef()
+            // Pictures used to be saved inside the lists file; give them their own.
+            if (images.isNotEmpty() && !WishImport.hasImagesFile(dir)) saveImages()
+            val file0 = fileRef
+            ref = withContext(Dispatchers.Default) { RefData(file0.history, WishImport.wishItems(lists) + file0.wishlist, file0.exportedAt) }
+            lastCrash = withContext(Dispatchers.IO) { CrashLog.read(dir) }
             loaded = true
             pendingPlay?.let { pendingPlay = null; play(it) }
             // Once a day, quietly bring the account-wide achievement count up to date.

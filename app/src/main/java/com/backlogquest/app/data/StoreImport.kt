@@ -52,8 +52,21 @@ data class ImportItem(
 class ImportError(message: String) : Exception(message)
 
 /** Makes "The Witcher® 3: Wild Hunt" and "the witcher 3 wild hunt" match. */
-fun normTitle(t: String): String =
-    t.lowercase().replace("&", "and").replace(Regex("[™®©]"), "").replace(Regex("[^a-z0-9]"), "")
+/**
+ * A title boiled down for matching: lower case, "&" as "and", letters a–z and
+ * digits only. Written as a plain loop because it runs over the whole wishlist.
+ */
+fun normTitle(t: String): String {
+    val lower = t.lowercase()
+    val out = StringBuilder(lower.length)
+    for (c in lower) {
+        when {
+            c == '&' -> out.append("and")
+            c in 'a'..'z' || c in '0'..'9' -> out.append(c)
+        }
+    }
+    return out.toString()
+}
 
 /** Small HTTP helper for the store APIs. */
 object Http {

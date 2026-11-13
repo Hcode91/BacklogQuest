@@ -54,6 +54,10 @@ Every imported list (CSV or web) has a **source**, such as "MobyGames". The impo
 - **Find duplicates** (in the wishlist and in Discover → My sources) lists imported games that are in your wishlist more than once, and imported games you already have. For repeats it keeps one copy (your data file's if there is one, else one with a picture) and ticks the rest for deleting. Games you already have start unticked, in case you want another platform's version. Your data file's own entries are never deleted.
 - Titles are compared ignoring case and punctuation ("Pac-Man" matches "PacMan"). The same title on different platforms counts as different games.
 
+## If the app crashes
+
+The app keeps a note of why it crashed, and the next time it opens it says so, with a **Copy details** button. Send those details along with a bug report. (A freeze that Android closes with "isn't responding" isn't a crash inside the app, so it can't be caught this way.)
+
 ## Discover
 
 The **Discover** tab is the RetroShelf catalogue browser, merged into this app. Pick a console, pick a source, and browse homebrew and free games with search, genre filters, saved games, recently viewed and downloads.

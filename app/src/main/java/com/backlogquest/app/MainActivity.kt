@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import com.backlogquest.app.data.BacklogViewModel
+import com.backlogquest.app.data.CrashLog
 import com.backlogquest.app.data.Shortcuts
 import com.backlogquest.app.data.WebImport
 import com.backlogquest.app.ui.BacklogApp
@@ -24,6 +25,8 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        // If the app ever crashes, keep the reason so it can be shown next time.
+        CrashLog.install(filesDir)
         setContent {
             BacklogTheme {
                 BacklogApp(vm)

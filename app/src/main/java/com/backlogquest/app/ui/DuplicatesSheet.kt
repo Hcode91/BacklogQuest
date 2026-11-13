@@ -23,6 +23,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,6 +38,8 @@ import coil.compose.AsyncImage
 import com.backlogquest.app.data.BacklogViewModel
 import com.backlogquest.app.data.Duplicates
 import com.backlogquest.app.data.WishItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Lists imported games that are already in your wishlist (same title, same
@@ -45,12 +48,20 @@ import com.backlogquest.app.data.WishItem
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DuplicatesSheet(vm: BacklogViewModel, onDismiss: () -> Unit) {
-    val groups = remember(vm.ref, vm.state.hiddenWish, vm.wishImages.size) {
-        Duplicates.groups(vm.ref.wishlist, vm.state.hiddenWish, vm.wishImages)
+    // Worked out in the background: with a big wishlist it takes a moment.
+    var found by remember { mutableStateOf<Pair<List<Duplicates.Group>, List<WishItem>>?>(null) }
+    LaunchedEffect(vm.ref, vm.state.hiddenWish, vm.state.games) {
+        found = null
+        val ref = vm.ref
+        val st = vm.state
+        val pictures = vm.wishImages.toMap()
+        found = withContext(Dispatchers.Default) {
+            Duplicates.groups(ref.wishlist, st.hiddenWish, pictures) to
+                Duplicates.inLibrary(ref.wishlist, st.hiddenWish, Duplicates.libraryTitles(st, ref))
+        }
     }
-    val owned = remember(vm.ref, vm.state.hiddenWish, vm.state.games) {
-        Duplicates.inLibrary(vm.ref.wishlist, vm.state.hiddenWish, Duplicates.libraryTitles(vm.state, vm.ref))
-    }
+    val groups = found?.first.orEmpty()
+    val owned = found?.second.orEmpty()
     // Ticked for deleting: every repeated copy to start with. Games you already own only if you tick them,
     // in case you want another platform's version.
     var ticked by remember(groups) { mutableStateOf(groups.flatMap { g -> g.extras.map { it.id } }.toSet()) }
@@ -74,7 +85,9 @@ fun DuplicatesSheet(vm: BacklogViewModel, onDismiss: () -> Unit) {
                     "and imported games you already have. Only imported games are deleted; " +
                     "your data file's own entries are never touched.",
             )
-            if (groups.isEmpty() && owned.isEmpty()) {
+            if (found == null) {
+                Text("Checking your wishlist…", color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            } else if (groups.isEmpty() && owned.isEmpty()) {
                 Text("No duplicates found.", color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
             if (groups.isNotEmpty()) {

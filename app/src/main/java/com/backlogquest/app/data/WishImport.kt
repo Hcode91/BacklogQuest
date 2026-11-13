@@ -1,8 +1,8 @@
 package com.backlogquest.app.data
 
 import android.content.Context
-import org.json.JSONArray
-import org.json.JSONObject
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonWriter
 import org.jsoup.Jsoup
 import java.io.File
 
@@ -172,46 +172,127 @@ object WishImport {
     // ---------------- Saving on the phone ----------------
 
     private const val FILE = "wishlist-imports.json"
+    private const val IMAGES_FILE = "wishlist-images.json"
 
-    fun save(dir: File, lists: List<CsvList>, images: Map<String, String>) {
-        val root = JSONObject()
-        root.put("lists", JSONArray().apply {
-            lists.forEach { l ->
-                put(JSONObject().put("platform", l.platform).put("file", l.file).put("source", l.source).put("games", JSONArray().apply {
-                    l.games.forEach { g ->
-                        put(JSONArray().put(g.id).put(g.title).put(g.url).put(g.genres.joinToString("|")))
-                    }
-                }))
-            }
-        })
-        root.put("images", JSONObject().apply { images.forEach { (k, v) -> put(k, v) } })
-        val tmp = File(dir, "$FILE.tmp")
-        tmp.writeText(root.toString())
-        tmp.renameTo(File(dir, FILE))
+    /**
+     * Writes a file a bit at a time (big lists never sit in memory twice), to a
+     * temporary name first so a crash part-way can't leave a broken file behind.
+     */
+    private fun writeAtomically(dir: File, name: String, body: (JsonWriter) -> Unit) {
+        val tmp = File(dir, "$name.tmp")
+        JsonWriter(tmp.bufferedWriter(Charsets.UTF_8)).use(body)
+        val target = File(dir, name)
+        if (!tmp.renameTo(target)) {
+            target.delete()
+            tmp.renameTo(target)
+        }
     }
 
-    fun load(dir: File): Pair<List<CsvList>, Map<String, String>> {
-        val f = File(dir, FILE)
-        if (!f.exists()) return emptyList<CsvList>() to emptyMap()
-        return try {
-            val root = JSONObject(f.readText())
-            val lists = root.optJSONArray("lists")?.let { a ->
-                (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { l ->
-                    val games = l.optJSONArray("games") ?: JSONArray()
-                    CsvList(
-                        l.optString("platform"), l.optString("file"),
-                        (0 until games.length()).mapNotNull { games.optJSONArray(it) }.map { g ->
-                            CsvGame(g.optString(0), g.optString(1), g.optString(2), g.optString(3).split("|").filter { it.isNotBlank() })
-                        },
-                        source = l.optString("source"),
-                    )
-                }
-            } ?: emptyList()
-            val images = root.optJSONObject("images")?.let { o -> o.keys().asSequence().associateWith { o.optString(it) } } ?: emptyMap()
-            lists to images
-        } catch (e: Exception) {
-            emptyList<CsvList>() to emptyMap()
+    fun saveLists(dir: File, lists: List<CsvList>) = writeAtomically(dir, FILE) { w ->
+        w.beginObject()
+        w.name("lists").beginArray()
+        for (l in lists) {
+            w.beginObject()
+            w.name("platform").value(l.platform)
+            w.name("file").value(l.file)
+            w.name("source").value(l.source)
+            w.name("games").beginArray()
+            for (g in l.games) {
+                w.beginArray().value(g.id).value(g.title).value(g.url).value(g.genres.joinToString("|")).endArray()
+            }
+            w.endArray()
+            w.endObject()
         }
+        w.endArray()
+        w.endObject()
+    }
+
+    fun saveImages(dir: File, images: Map<String, String>) = writeAtomically(dir, IMAGES_FILE) { w ->
+        w.beginObject()
+        for ((id, address) in images) w.name(id).value(address)
+        w.endObject()
+    }
+
+    fun save(dir: File, lists: List<CsvList>, images: Map<String, String>) {
+        saveLists(dir, lists)
+        saveImages(dir, images)
+    }
+
+    fun hasImagesFile(dir: File) = File(dir, IMAGES_FILE).exists()
+
+    private fun readImages(r: JsonReader, into: MutableMap<String, String>) {
+        r.beginObject()
+        while (r.hasNext()) into[r.nextName()] = r.nextString()
+        r.endObject()
+    }
+
+    private fun readList(r: JsonReader): CsvList {
+        var platform = ""
+        var file = ""
+        var source = ""
+        val games = ArrayList<CsvGame>()
+        r.beginObject()
+        while (r.hasNext()) {
+            when (r.nextName()) {
+                "platform" -> platform = r.nextString()
+                "file" -> file = r.nextString()
+                "source" -> source = r.nextString()
+                "games" -> {
+                    r.beginArray()
+                    while (r.hasNext()) {
+                        r.beginArray()
+                        val id = r.nextString()
+                        val title = r.nextString()
+                        val url = r.nextString()
+                        val genres = r.nextString()
+                        while (r.hasNext()) r.skipValue()
+                        r.endArray()
+                        games += CsvGame(id, title, url, genres.split("|").filter { it.isNotBlank() })
+                    }
+                    r.endArray()
+                }
+                else -> r.skipValue()
+            }
+        }
+        r.endObject()
+        return CsvList(platform, file, games, source)
+    }
+
+    /** Your imported lists and the pictures found for them. Whatever can be read is kept. */
+    fun load(dir: File): Pair<List<CsvList>, Map<String, String>> {
+        val lists = ArrayList<CsvList>()
+        val images = HashMap<String, String>()
+        val f = File(dir, FILE)
+        if (f.exists()) {
+            try {
+                JsonReader(f.bufferedReader(Charsets.UTF_8)).use { r ->
+                    r.beginObject()
+                    while (r.hasNext()) {
+                        when (r.nextName()) {
+                            "lists" -> {
+                                r.beginArray()
+                                while (r.hasNext()) lists += readList(r)
+                                r.endArray()
+                            }
+                            // Older versions kept the pictures in this file too.
+                            "images" -> readImages(r, images)
+                            else -> r.skipValue()
+                        }
+                    }
+                    r.endObject()
+                }
+            } catch (e: Exception) {
+                // A damaged file: keep the lists that were read before the damage.
+            }
+        }
+        val fi = File(dir, IMAGES_FILE)
+        if (fi.exists()) {
+            try {
+                JsonReader(fi.bufferedReader(Charsets.UTF_8)).use { readImages(it, images) }
+            } catch (e: Exception) {
+            }
+        }
+        return lists to images
     }
 
     // ---------------- Pictures from a game's link ----------------
