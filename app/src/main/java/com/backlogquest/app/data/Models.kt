@@ -16,6 +16,32 @@ val DEFAULT_DEVICES = listOf(
     Device("phone", "Phone", true),
 )
 
+/** An emulator you keep track of in the Emulators tab, and where its updates come from. */
+data class EmuEntry(
+    val id: String,
+    val name: String,
+    /** Its GitHub project, as "owner/repo". */
+    val repo: String = "",
+    /** The Android app, when it's on this phone: its version is read straight from it. */
+    val pkg: String = "",
+    /** The version you have, typed in, for an emulator that isn't on this phone. */
+    val version: String = "",
+    /** Where it runs when it isn't on this phone, such as "PC". */
+    val where: String = "",
+    /** Count pre-releases and nightlies as the latest version. */
+    val prerelease: Boolean = false,
+    /** Part of a download's file name, to pick the right one when a release has several. */
+    val assetHint: String = "",
+    /** The latest release found: its tag, name, page and date, and the day it was checked. */
+    val latest: String = "",
+    val latestName: String = "",
+    val latestUrl: String = "",
+    val latestAt: String = "",
+    val checkedAt: String = "",
+    /** Why the last check failed, if it did. */
+    val checkError: String = "",
+)
+
 /** A game in your own list. status is one of: backlog, playing, wishlist, beaten, dropped. */
 data class Game(
     val id: String,
@@ -78,6 +104,8 @@ data class Price(
 
 /** Everything you can change in the app. Saved on the phone. */
 data class AppState(
+    /** Emulators you keep track of in the Emulators tab. */
+    val emulators: List<EmuEntry> = emptyList(),
     val baseline: Int = 0,
     val devices: List<Device> = DEFAULT_DEVICES,
     val games: List<Game> = emptyList(),

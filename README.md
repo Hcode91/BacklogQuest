@@ -68,6 +68,17 @@ Games are done one at a time with a short pause, each with a time limit, and the
 
 The app keeps a note of why it crashed, and the next time it opens it says so, with a **Copy details** button. Send those details along with a bug report. (A freeze that Android closes with "isn't responding" isn't a crash inside the app, so it can't be caught this way.)
 
+## Emulators
+
+The **Emulators** tab keeps track of the emulators you use and tells you when there's a newer version on GitHub.
+
+- **Add** an emulator with **+ Add emulator**, or tap one under **On this phone** (emulators the app recognises on your phone are listed there).
+- **Your version**: for an emulator on this phone the app reads the installed version itself. For one elsewhere (on your PC, say) you choose the device and type the version in.
+- **GitHub link**: paste the project's address (`https://github.com/owner/project`). The app checks its releases once a day when you open the tab, or when you tap **Check for updates**. GitHub allows 60 checks an hour without signing in.
+- **Up to date?** Versions are compared by their numbers (`1.19.1_GIT` matches `v1.19.1`). When the versions can't be compared (nightly builds named by date or commit, say), it says "Can't tell" instead of guessing. Tick **Include pre-releases and nightlies** for emulators that mostly publish those.
+- **Updating** an emulator on this phone downloads the right APK from the release and opens Android's installer for you to confirm. The first time, Android asks you to allow Backlog Quest to install apps. If a release has several Android builds and the app can't tell which suits your phone, pick one in the emulator's sheet (and type part of its name to remember it). An update only installs over your copy if both come from the same place: a GitHub build won't replace a Play Store copy.
+- For an emulator elsewhere, **Release** opens the release page so you can download it there.
+
 ## Discover
 
 The **Discover** tab is the RetroShelf catalogue browser, merged into this app. Pick a console, pick a source, and browse homebrew and free games with search, genre filters, saved games, recently viewed and downloads.

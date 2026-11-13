@@ -8,6 +8,8 @@
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
+    <!-- Installs emulator updates you choose in the Emulators tab (Android asks you to confirm each one). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Optional (you turn it on in Settings): measures how long you actually played. -->
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
@@ -36,5 +38,15 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <!-- Lets Android's installer read an emulator update the app has downloaded. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

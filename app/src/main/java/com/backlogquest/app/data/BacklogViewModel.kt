@@ -517,6 +517,137 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ---------------- Emulators ----------------
+
+    var emuBusy by mutableStateOf(false)
+        private set
+    var emuMessage by mutableStateOf("")
+    /** Releases found while the app is open, with their downloads, by emulator id. */
+    val emuReleases = mutableStateMapOf<String, GitHubReleases.Release>()
+    /** Update downloads in progress, 0–100, by emulator id. */
+    val emuProgress = mutableStateMapOf<String, Int>()
+    private val emuJobs = HashMap<String, Job>()
+
+    /** The version you have: read from the app if it's on this phone, else the one you typed in. */
+    fun installedVersion(e: EmuEntry): String? =
+        if (e.pkg.isNotBlank()) EmuUpdates.installedVersion(getApplication(), e.pkg) else e.version
+
+    fun saveEmulator(e: EmuEntry) = update { s ->
+        s.copy(
+            emulators = if (s.emulators.any { it.id == e.id }) s.emulators.map { if (it.id == e.id) e else it }
+            else s.emulators + e,
+        )
+    }
+
+    fun deleteEmulator(id: String) {
+        emuJobs.remove(id)?.cancel()
+        emuReleases.remove(id)
+        update { s -> s.copy(emulators = s.emulators.filter { it.id != id }) }
+    }
+
+    /** Records a release found for an emulator. */
+    fun noteRelease(id: String, r: GitHubReleases.Release) {
+        emuReleases[id] = r
+        update { s ->
+            s.copy(
+                emulators = s.emulators.map {
+                    if (it.id == id) it.copy(
+                        latest = r.version, latestName = r.name, latestUrl = r.page, latestAt = r.published,
+                        checkedAt = today(), checkError = "",
+                    ) else it
+                },
+            )
+        }
+    }
+
+    /** Looks up the latest release of each emulator with a GitHub link (or just those in [ids]). */
+    fun checkEmulators(ids: Set<String>? = null, quiet: Boolean = false) {
+        if (emuBusy) return
+        val targets = state.emulators.filter { it.repo.isNotBlank() && (ids == null || it.id in ids) }
+        if (targets.isEmpty()) {
+            if (!quiet) emuMessage = "Add a GitHub link to an emulator to check it for updates."
+            return
+        }
+        emuBusy = true
+        if (!quiet) emuMessage = "Checking GitHub…"
+        viewModelScope.launch {
+            var failed = 0
+            try {
+                for ((i, e) in targets.withIndex()) {
+                    if (!quiet) emuMessage = "Checking ${e.name}… ${i + 1} of ${targets.size}"
+                    try {
+                        noteRelease(e.id, GitHubReleases.latest(e.repo, e.prerelease))
+                    } catch (err: GitHubReleases.ReleaseError) {
+                        failed++
+                        val why = err.message.orEmpty()
+                        update { s -> s.copy(emulators = s.emulators.map { if (it.id == e.id) it.copy(checkError = why, checkedAt = today()) else it }) }
+                        // Asking again won't help until GitHub's hourly limit resets.
+                        if (why.contains("limiting")) {
+                            emuMessage = why
+                            return@launch
+                        }
+                    }
+                }
+                val updates = state.emulators.count { e ->
+                    val have = installedVersion(e)
+                    e.latest.isNotBlank() && have != null &&
+                        GitHubReleases.compare(have, GitHubReleases.Release(e.latest, e.latestName, "", "", false, emptyList(), "")) ==
+                        GitHubReleases.Status.UPDATE
+                }
+                emuMessage = listOfNotNull(
+                    when (updates) {
+                        0 -> "Everything is up to date, as far as can be told."
+                        1 -> "1 update available."
+                        else -> "$updates updates available."
+                    },
+                    if (failed > 0) "$failed couldn't be checked." else null,
+                ).joinToString(" ")
+            } finally {
+                emuBusy = false
+            }
+        }
+    }
+
+    /**
+     * Downloads [asset] and opens Android's installer for it. The first time, Android
+     * asks you to allow Backlog Quest to install apps; after that, tap Update again.
+     */
+    fun installEmuUpdate(e: EmuEntry, asset: GitHubReleases.Asset) {
+        val ctx = getApplication<Application>()
+        if (!EmuUpdates.canInstall(ctx)) {
+            emuMessage = "Allow Backlog Quest to install apps on the next screen, then come back and tap Update again."
+            try {
+                EmuUpdates.allowInstalls(ctx)
+            } catch (err: Exception) {
+                emuMessage = "Allow Backlog Quest to install apps in Android's settings (Apps → Special access → Install unknown apps)."
+            }
+            return
+        }
+        if (emuJobs[e.id]?.isActive == true) return
+        emuProgress[e.id] = 0
+        emuJobs[e.id] = viewModelScope.launch {
+            try {
+                val file = EmuUpdates.download(ctx, asset) { emuProgress[e.id] = it }
+                EmuUpdates.install(ctx, file)
+                emuMessage = "Confirm the update for ${e.name} in Android's installer."
+            } catch (err: EmuUpdates.UpdateError) {
+                emuMessage = "${e.name}: ${err.message}"
+            } catch (err: kotlinx.coroutines.CancellationException) {
+                throw err
+            } catch (err: Exception) {
+                emuMessage = "${e.name}: the update couldn't be opened."
+            } finally {
+                emuProgress.remove(e.id)
+                emuJobs.remove(e.id)
+            }
+        }
+    }
+
+    fun cancelEmuUpdate(id: String) {
+        emuJobs.remove(id)?.cancel()
+        emuProgress.remove(id)
+    }
+
     // ---------------- Achievement totals ----------------
 
     var achBusy by mutableStateOf(false)
