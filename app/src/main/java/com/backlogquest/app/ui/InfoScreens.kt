@@ -19,7 +19,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -29,13 +33,75 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.backlogquest.app.data.ACHIEVEMENTS
+import com.backlogquest.app.data.AchievementTotals
+import com.backlogquest.app.data.fmtDate
 import com.backlogquest.app.data.BacklogViewModel
 import com.backlogquest.app.data.allDone
 import com.backlogquest.app.data.beaten
 import com.backlogquest.app.data.totals
 
+private val PROFILE_TABS = listOf("stats" to "Stats", "trophies" to "Trophy room")
+
+/** Your numbers and your trophies in one place. */
 @Composable
-fun TrophiesScreen(vm: BacklogViewModel) {
+fun ProfileScreen(vm: BacklogViewModel) {
+    var view by rememberSaveable { mutableStateOf("stats") }
+    val top: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SectionTitle("PROFILE")
+            ChipRow(PROFILE_TABS, view) { view = it }
+        }
+    }
+    if (view == "trophies") TrophiesScreen(vm, top) else StatsScreen(vm, top)
+}
+
+/** Achievements earned on each platform, with a button to recount your accounts. */
+@Composable
+private fun AchievementsPanel(vm: BacklogViewModel) {
+    val s = vm.state
+    val earned = remember(s) { AchievementTotals.summary(s) }
+    Panel {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SectionTitle("ACHIEVEMENTS", Modifier.weight(1f))
+            Text(
+                "%,d".format(earned.total),
+                color = BQ.B, fontFamily = BQ.Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp,
+            )
+        }
+        earned.parts.forEach { part ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(part.label, color = BQ.Ink, fontSize = 14.sp)
+                    Text(
+                        if (part.wholeAccount) "Your whole account" else "Ticked on games in this app",
+                        color = BQ.Muted, fontSize = 12.sp,
+                    )
+                }
+                Text(
+                    "%,d".format(part.count),
+                    color = BQ.Ink, fontFamily = BQ.Mono, fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                )
+            }
+        }
+        if (earned.parts.isEmpty()) Hint("Nothing counted yet.")
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PixelButton(if (vm.achBusy) "COUNTING…" else "RECOUNT", enabled = !vm.achBusy) {
+                vm.refreshAchievementTotals()
+            }
+            Hint(
+                vm.achMessage.ifBlank {
+                    if (s.achTotalsAt.isBlank()) "Reads your Steam and RetroAchievements accounts."
+                    else "Accounts last read ${fmtDate(s.achTotalsAt)}."
+                },
+                Modifier.weight(1f),
+            )
+        }
+        Hint("Steam and RetroAchievements use the details in Setup → Achievements. PlayStation and Xbox can't be read as a whole account.")
+    }
+}
+
+@Composable
+fun TrophiesScreen(vm: BacklogViewModel, top: @Composable () -> Unit = {}) {
     val s = vm.state
     val ref = vm.ref
     val results = remember(s, ref) {
@@ -48,6 +114,7 @@ fun TrophiesScreen(vm: BacklogViewModel) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item { StatusPanel(vm) }
+        item { top() }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SectionTitle("TROPHY ROOM", Modifier.weight(1f))
@@ -100,7 +167,7 @@ fun TrophiesScreen(vm: BacklogViewModel) {
 private class StatTile(val value: String, val label: String)
 
 @Composable
-fun StatsScreen(vm: BacklogViewModel) {
+fun StatsScreen(vm: BacklogViewModel, top: @Composable () -> Unit = {}) {
     val s = vm.state
     val ref = vm.ref
     val data = remember(s, ref) {
@@ -156,6 +223,8 @@ fun StatsScreen(vm: BacklogViewModel) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item { StatusPanel(vm) }
+        item { top() }
+        item { AchievementsPanel(vm) }
         item { SectionTitle("BACKLOG BRAIN") }
         items(data.tiles.chunked(2)) { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

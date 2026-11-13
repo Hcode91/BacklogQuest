@@ -10,6 +10,17 @@ The app downloads `backlog-data.json` from this repo (the root of the `main` bra
 - After that, your games list lives on your phone. Tap **Setup → Sync now** to refresh history, wishlist and catalog whenever the file changes.
 - Updating `backlog-data.json` doesn't start a new app build.
 
+## The tabs
+
+- **Now**: only the games you're playing, each with the hours you've put in so far, its achievements, and Resume / Beaten it buttons.
+- **Spin**: three ways to let chance decide. *What next* spins a device and then a game from your backlog (the two-for-two rule still applies). *Something new* picks a game you don't own, from your wishlist or the Discover catalogues saved on your phone. *Where from* spins a source first (your devices, your wishlist and every Discover source), then a game from it.
+- **Games**: your library as cover tiles or a list.
+- **Discover**: homebrew and free-game catalogues (see below).
+- **Profile**: stats and the trophy room.
+- **Setup**: a grid of tiles; tap one to open that part.
+
+The status panel's achievements figure is everything you've earned: your whole Steam and RetroAchievements accounts (with the details from **Setup → Achievements**), plus PlayStation and Xbox trophies you've ticked on games in the app. The accounts are re-read once a day when the app opens, or with **Recount** in Profile. Steam only answers one game at a time, so the first count can take a minute; after that only games you've played since are re-checked.
+
 ## Discover
 
 The **Discover** tab is the RetroShelf catalogue browser, merged into this app. Pick a console, pick a source, and browse homebrew and free games with search, genre filters, saved games, recently viewed and downloads.

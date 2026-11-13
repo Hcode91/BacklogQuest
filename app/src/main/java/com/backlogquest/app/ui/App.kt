@@ -42,19 +42,23 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.backlogquest.app.data.ACHIEVEMENTS
+import com.backlogquest.app.data.AchievementTotals
 import com.backlogquest.app.data.BacklogViewModel
+import com.backlogquest.app.data.Game
+import com.backlogquest.app.data.newId
+import com.backlogquest.app.data.normTitle
 import com.backlogquest.app.data.today
 import com.backlogquest.app.data.totals
-import com.backlogquest.app.data.unlocked
+import com.backlogquest.app.discover.Consoles
+import com.backlogquest.app.discover.Game as DiscoverGame
 import kotlinx.coroutines.delay
 
 enum class Tab(val icon: String, val label: String) {
-    PLAY("▶", "PLAY"),
+    NOW("▶", "NOW"),
+    SPIN("◔", "SPIN"),
     GAMES("≡", "GAMES"),
     DISCOVER("◎", "DISCOVER"),
-    TROPHIES("★", "TROPHY"),
-    STATS("▦", "STATS"),
+    PROFILE("★", "PROFILE"),
     SETUP("⚙", "SETUP"),
 }
 
@@ -71,14 +75,15 @@ class Filters {
 /** What the edit sheet is showing: a new game, or an existing one by id. */
 sealed class EditTarget {
     data class New(val status: String) : EditTarget()
-    data class Existing(val id: String) : EditTarget()
+    /** [beaten] opens the sheet already switched to Beaten, ready to confirm. */
+    data class Existing(val id: String, val beaten: Boolean = false) : EditTarget()
     /** A game from your imported history, by its position in the history list. */
     data class History(val index: Int) : EditTarget()
 }
 
 @Composable
 fun BacklogApp(vm: BacklogViewModel) {
-    var tab by rememberSaveable { mutableStateOf(Tab.PLAY) }
+    var tab by rememberSaveable { mutableStateOf(Tab.NOW) }
     val filters = remember { Filters() }
     var editing by remember { mutableStateOf<EditTarget?>(null) }
     var wishOpen by remember { mutableStateOf<String?>(null) }
@@ -86,16 +91,54 @@ fun BacklogApp(vm: BacklogViewModel) {
     val discoverNav = rememberSaveable(saver = DiscoverNav.Saver) { DiscoverNav() }
     val discoverSaved = rememberSaveableStateHolder()
 
-    BackHandler(enabled = tab != Tab.PLAY) { tab = Tab.PLAY }
+    BackHandler(enabled = tab != Tab.NOW) { tab = Tab.NOW }
+
+    /** Copies a Discover game into your backlog and opens it so you can pick the device. */
+    val addFromDiscover: (DiscoverGame) -> Unit = { found ->
+        val s = vm.state
+        val already = s.games.firstOrNull {
+            normTitle(it.title) == normTitle(found.title) && it.status in setOf("backlog", "playing")
+        }
+        if (already != null) {
+            vm.showToast("ALREADY IN YOUR BACKLOG\n${already.title}")
+            editing = EditTarget.Existing(already.id)
+        } else {
+            val console = found.consoles.firstOrNull().orEmpty()
+            val game = Game(
+                id = newId(), title = found.title, device = s.devices.first().id, status = "backlog",
+                genre = found.genres.firstOrNull().orEmpty(),
+                desc = found.description.take(400),
+                cover = found.artwork.orEmpty(),
+                platform = Consoles.all.firstOrNull { it.id == console }?.name ?: console,
+                source = "Discover",
+                addedAt = today(), order = System.currentTimeMillis(),
+            )
+            vm.update { it.copy(games = it.games + game) }
+            vm.showToast("ADDED TO BACKLOG\n${game.title}")
+            editing = EditTarget.Existing(game.id)
+        }
+    }
 
     Box(Modifier.fillMaxSize().background(BQ.Shell)) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth().statusBarsPadding()) {
                 when (tab) {
-                    Tab.PLAY -> PlayScreen(
+                    Tab.NOW -> NowScreen(
+                        vm,
+                        onEdit = { editing = EditTarget.Existing(it) },
+                        onBeaten = { editing = EditTarget.Existing(it, beaten = true) },
+                        onSpin = { tab = Tab.SPIN },
+                    )
+                    Tab.SPIN -> SpinScreen(
                         vm, filters,
                         onAdd = { editing = EditTarget.New("backlog") },
                         onOpenWish = { wishOpen = it },
+                        onOpenDiscover = { game ->
+                            discoverNav.switchSection(DiscoverNav.HOME)
+                            discoverNav.open("game/${game.id}")
+                            tab = Tab.DISCOVER
+                        },
+                        onAddToBacklog = addFromDiscover,
                     )
                     Tab.GAMES -> GamesScreen(
                         vm, filters,
@@ -104,9 +147,10 @@ fun BacklogApp(vm: BacklogViewModel) {
                         onEditHistory = { editing = EditTarget.History(it) },
                         onOpenWish = { wishOpen = it },
                     )
-                    Tab.DISCOVER -> DiscoverScreen(discoverNav, discoverSaved, toast = { vm.toast = it })
-                    Tab.TROPHIES -> TrophiesScreen(vm)
-                    Tab.STATS -> StatsScreen(vm)
+                    Tab.DISCOVER -> DiscoverScreen(
+                        discoverNav, discoverSaved, toast = { vm.toast = it }, onAddToBacklog = addFromDiscover,
+                    )
+                    Tab.PROFILE -> ProfileScreen(vm)
                     Tab.SETUP -> SetupScreen(vm)
                 }
             }
@@ -218,7 +262,7 @@ fun StatusPanel(vm: BacklogViewModel) {
     val s = vm.state
     val ref = vm.ref
     val t = remember(s, ref) { totals(s, ref) }
-    val trophies = remember(s, ref) { unlocked(s, ref).size }
+    val earned = remember(s) { AchievementTotals.summary(s) }
     val playing = s.games.filter { it.status == "playing" }
     val backlog = s.games.count { it.status == "backlog" }
 
@@ -290,7 +334,17 @@ fun StatusPanel(vm: BacklogViewModel) {
                 LcdStat("${t.beaten}", "BEATEN", Modifier.weight(1f))
                 LcdStat("${t.year}", "IN ${today().take(4)}", Modifier.weight(1f))
                 LcdStat("$backlog", "BACKLOG", Modifier.weight(1f))
-                LcdStat("$trophies/${ACHIEVEMENTS.size}", "TROPHIES", Modifier.weight(1f))
+                // Every achievement you've earned, on every platform that has them.
+                LcdStat("%,d".format(earned.total), "ACHIEVEMENTS", Modifier.weight(1.5f))
+            }
+            if (earned.parts.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    earned.parts.joinToString(" · ") { "${it.short} ${"%,d".format(it.count)}" },
+                    Modifier.fillMaxWidth(),
+                    color = BQ.LcdDim, fontFamily = BQ.Mono, fontSize = 11.sp,
+                    textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
             }
             Spacer(Modifier.height(8.dp))
             Box(Modifier.fillMaxWidth().height(1.dp).background(BQ.LcdDim))

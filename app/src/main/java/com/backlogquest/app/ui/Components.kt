@@ -3,6 +3,7 @@ package com.backlogquest.app.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,11 +32,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.backlogquest.app.data.Game
 import com.backlogquest.app.data.TAG_INFO
+import com.backlogquest.app.data.fmtNum
 import java.io.File
 
 enum class BtnKind { A, B, PLAIN }
@@ -72,8 +77,42 @@ fun PixelButton(
             fontFamily = BQ.Mono,
             fontWeight = FontWeight.Bold,
             fontSize = 13.sp,
+            textAlign = TextAlign.Center,
         )
     }
+}
+
+/** A tappable tile in the console look, used for the grids across the app. */
+@Composable
+fun Tile(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    padding: Dp = 12.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val shape = RoundedCornerShape(10.dp)
+    val base = modifier.clip(shape).background(BQ.Shell2).border(1.dp, BQ.Edge, shape)
+    Column(
+        (if (onClick != null) base.clickable(onClick = onClick) else base).padding(padding),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        content = content,
+    )
+}
+
+/** "19h (HLTB)", "~12h" for an estimate, or "" when unknown. */
+fun estText(g: Game): String {
+    if (!(g.est > 0)) return ""
+    return when (g.estSource) {
+        "hltb" -> "${fmtNum(g.est)}h (HLTB)"
+        "ai", "rawg" -> "~${fmtNum(g.est)}h"
+        else -> "${fmtNum(g.est)}h"
+    }
+}
+
+fun platformList(p: List<String>): String = when {
+    p.isEmpty() -> "Platform unknown"
+    p.size > 4 -> p.take(4).joinToString(", ") + " +${p.size - 4} more"
+    else -> p.joinToString(", ")
 }
 
 /** A pill you tap to choose a filter or tab. */

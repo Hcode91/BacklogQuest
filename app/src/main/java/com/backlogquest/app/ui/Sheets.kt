@@ -97,7 +97,9 @@ fun EditSheet(vm: BacklogViewModel, target: EditTarget, onDismiss: () -> Unit) {
     var device by remember(target) { mutableStateOf(start.device) }
     var platform by remember(target) { mutableStateOf(start.platform) }
     var foundPlatforms by remember(target) { mutableStateOf(listOf<String>()) }
-    var status by remember(target) { mutableStateOf(start.status) }
+    var status by remember(target) {
+        mutableStateOf(if ((target as? EditTarget.Existing)?.beaten == true) "beaten" else start.status)
+    }
     var genre by remember(target) { mutableStateOf(start.genre) }
     var est by remember(target) { mutableStateOf(if (start.est > 0) fmtNum(start.est) else "") }
     var estSource by remember(target) { mutableStateOf(if (start.est > 0) start.estSource.ifBlank { "manual" } else "") }

@@ -94,6 +94,10 @@ data class AppState(
     val steamProfile: String = "",
     /** Wishlist prices, keyed by normTitle(title). */
     val prices: Map<String, Price> = emptyMap(),
+    /** Achievements earned across a whole account, by source ("Steam", "RetroAchievements"). */
+    val achTotals: Map<String, Int> = emptyMap(),
+    /** The day those account totals were last fetched. */
+    val achTotalsAt: String = "",
 )
 
 /** One completion from your imported HowLongToBeat history. */
