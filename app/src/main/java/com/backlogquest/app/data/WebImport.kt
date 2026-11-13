@@ -141,10 +141,26 @@ object WebImport {
     private fun clean(text: String): String = text.replace(Regex("\\s+"), " ").trim()
 
     private fun picture(img: Element): String {
-        val lazy = listOf("data-src", "data-original", "data-lazy-src", "data-lazy").map { img.absUrl(it) }.firstOrNull { it.isNotBlank() }
+        // Lazy-loading sites keep the real address in an attribute of their own:
+        // data-src, data-original, data-lazy_src and so on.
+        val lazy = img.attributes().asList()
+            .filter { it.key.startsWith("data-") && it.key.contains("src") && !it.key.contains("set") }
+            .map { img.absUrl(it.key) }.firstOrNull { it.startsWith("http") }
         val first = img.attr("srcset").ifBlank { img.attr("data-srcset") }.split(",").firstOrNull()?.trim()?.substringBefore(' ').orEmpty()
         val fromSet = if (first.isBlank()) "" else runCatching { URI(img.baseUri()).resolve(first).toString() }.getOrDefault("")
         return lazy ?: img.absUrl("src").takeIf { it.isNotBlank() && !it.startsWith("data:") } ?: fromSet
+    }
+
+    /**
+     * The site an address belongs to, ignoring sub-addresses: "author.itch.io"
+     * and "itch.io" are the same site, and so are "www.bbc.co.uk" and "bbc.co.uk".
+     */
+    fun siteOf(url: String): String {
+        val host = runCatching { URI(url).host.orEmpty() }.getOrDefault("").lowercase()
+        val labels = host.split('.').filter { it.isNotBlank() }
+        if (labels.size <= 2) return labels.joinToString(".")
+        val keep = if (labels[labels.size - 2].length <= 3 && labels.last().length == 2) 3 else 2
+        return labels.takeLast(keep).joinToString(".")
     }
 
     /** Where an element sits in the page, by tag and class: list entries share the same answer. */
@@ -171,41 +187,123 @@ object WebImport {
         return WebGame(title, url, WishImport.imageFrom(html, url).orEmpty())
     }
 
+    /** Link text that is a control rather than a game's name. */
+    private val CONTROL_TEXT = Regex(
+        "^(more|read more|see more|show more|view|view all|see all|details|info|download|downloads|play|" +
+            "next|prev|previous|back|home|top|log ?in|sign ?in|sign ?up|register|[«»‹›<>←→↑]+|\\d+)$",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** Addresses of a site's own pages (menus, tags, paging) rather than of games. */
+    private val UTILITY_PATH = Regex(
+        "/(tags?|categor(y|ies)|page|log(in|out)|register|sign(up|in|-in|-up)|account|cart|search|privacy|terms|" +
+            "contact|about|help|faq|forums?|users?|profile|members?|login\\.php)(/|$)",
+        RegexOption.IGNORE_CASE,
+    )
+
     /**
-     * The games on a list page: the biggest run of links that each carry a
-     * picture and sit in the same kind of spot on the page. Returns nothing
-     * when the page doesn't look like a list (fewer than four such links).
+     * Which part of a site a link goes to: its host and folders, with numbers
+     * evened out. "/game/115374/airsea-attack/" and "/game/115332/auto-sports-10/"
+     * both give "/game/#", while "/about" gives "/".
+     */
+    fun pathPattern(url: String): String {
+        val uri = try {
+            URI(url)
+        } catch (e: Exception) {
+            return url
+        }
+        val parts = uri.path.orEmpty().split('/').filter { it.isNotBlank() }.dropLast(1)
+            .map { it.replace(Regex("\\d+"), "#") }
+        return siteOf(url) + "/" + parts.joinToString("/")
+    }
+
+    /**
+     * The games on a list page. Every link is a candidate, with or without a picture.
+     * Links are grouped by where they sit on the page and which part of the site
+     * they go to, and the biggest group is taken: a list of games is many links of
+     * the same kind, side by side, all going to the same sort of page. Menus,
+     * paging and links to other parts of the site land in groups of their own.
+     *
+     * Games without a picture here usually have one on their own page, which
+     * Fetch pictures picks up after they're added.
+     *
+     * Returns nothing when the page doesn't look like a list (fewer than four games).
      */
     fun listGames(html: String, url: String): List<WebGame> {
         val doc = Jsoup.parse(html, url)
-        class Entry(val shape: String, val game: WebGame)
+        val here = url.substringBefore('#')
+        val site = siteOf(url)
+        class Entry(val key: String, val at: Int, val game: WebGame)
         val entries = ArrayList<Entry>()
-        for (img in doc.select("a[href] img, a[href] picture img")) {
-            val link = img.parents().firstOrNull { it.tagName() == "a" && it.hasAttr("href") } ?: continue
-            val href = link.absUrl("href")
-            if (!href.startsWith("http") || href.substringBefore('#') == url.substringBefore('#')) continue
-            val image = picture(img)
-            if (image.isBlank()) continue
-            // The name: the picture's own description, the link's text or tooltip, or a heading beside it.
-            val card = link.parent()
-            val title = clean(
-                listOf(
-                    img.attr("alt"), link.attr("title"), link.attr("aria-label"), link.text(),
-                    card?.selectFirst("h1, h2, h3, h4, h5, .title, [class*=title], [class*=name]")?.text().orEmpty(),
-                    card?.select("a[href]")?.firstOrNull { it.absUrl("href") == href && it.text().isNotBlank() }?.text().orEmpty(),
-                ).firstOrNull { clean(it).length >= 2 }.orEmpty(),
-            )
-            if (title.isBlank()) continue
-            entries += Entry(shape(link), WebGame(title.take(160), href, image))
+        // Covers by the address they link to, so a name found on another link can be given its picture.
+        val pictures = HashMap<String, String>()
+        for ((at, link) in doc.select("a[href]").withIndex()) {
+            val href = link.absUrl("href").substringBefore('#')
+            if (!href.startsWith("http") || href == here) continue
+            val img = link.selectFirst("img")
+            val image = img?.let(::picture).orEmpty()
+            val title: String
+            if (img != null && image.isNotBlank()) {
+                pictures.putIfAbsent(href, image)
+                // The name: the picture's own description or the link's tooltip, then (a few levels
+                // up in the same card) another link to the same game, then the link's own text,
+                // then a heading. A cover link's own text is often just a badge such as "GIF" or "NEW".
+                val around = link.parents().take(3)
+                title = clean(
+                    (
+                        listOf(img.attr("alt"), link.attr("title"), link.attr("aria-label")) +
+                            around.map { c ->
+                                c.select("a[href]").firstOrNull {
+                                    it !== link && it.absUrl("href").substringBefore('#') == href && it.text().isNotBlank()
+                                }?.text().orEmpty()
+                            } +
+                            listOf(link.text()) +
+                            around.map { c -> c.selectFirst("h1, h2, h3, h4, h5, .title, [class*=title], [class*=name]")?.text().orEmpty() }
+                        ).firstOrNull { clean(it).length >= 2 }.orEmpty(),
+                )
+            } else {
+                // A plain text link: only on this site, outside menus, and not a control like "Next".
+                if (siteOf(href) != site) continue
+                if (link.parents().any { it.tagName() in setOf("nav", "header", "footer", "aside") }) continue
+                if (UTILITY_PATH.containsMatchIn(runCatching { URI(href).path.orEmpty() }.getOrDefault(""))) continue
+                title = clean(link.text().ifBlank { link.attr("title") })
+                if (CONTROL_TEXT.matches(title)) continue
+            }
+            if (title.length < 2) continue
+            entries += Entry(shape(link) + " @ " + pathPattern(href), at, WebGame(title.take(160), href, image))
         }
-        val best = entries.groupBy { it.shape }.values
-            .map { group -> group.map { it.game }.distinctBy { it.url } }
-            .maxByOrNull { it.size }.orEmpty()
-        return if (best.size >= 4) best else emptyList()
+        val groups = entries.groupBy { it.key }.values
+            .map { group ->
+                group.distinctBy { it.game.url }
+                    .map { e -> Entry(e.key, e.at, e.game.copy(image = e.game.image.ifBlank { pictures[e.game.url].orEmpty() })) }
+            }
+            .filter { it.size >= 4 }
+        // The most games wins, with games that have pictures counting for half as much
+        // again, so a grid of covers beats a slightly longer row of tags. On a tie,
+        // whichever comes first on the page.
+        fun score(group: List<Entry>) = group.size + 0.5 * group.count { it.game.image.isNotBlank() }
+        val best = groups.maxWithOrNull(
+            compareBy<List<Entry>> { score(it) }.thenByDescending { group -> group.first().at },
+        ).orEmpty()
+        return best.map { it.game }
     }
 
     /** The whole page as the hidden browser sees it, for sites that only answer a real browser. */
     private val HTML_SCRIPT = "(function(){ ${Achievements.READY} return document.documentElement.outerHTML; })()"
+
+    /**
+     * The page once its scripts have filled it in: waits until the number of
+     * links stops growing (checked every 1.5 s) before handing the page over.
+     */
+    private val BUILT_SCRIPT = """
+        (function(){ ${Achievements.READY}
+          var n = document.querySelectorAll('a[href]').length;
+          var last = (typeof window.__bqLinks === 'number') ? window.__bqLinks : -1;
+          window.__bqLinks = n;
+          if (n !== last) return '';
+          return document.documentElement.outerHTML;
+        })()
+    """.trimIndent()
 
     private suspend fun html(ctx: Context, url: String): String {
         val plain = try {
@@ -236,11 +334,20 @@ object WebImport {
         }
         progress("Reading the page…")
         val body = html(ctx, url)
-        return withContext(Dispatchers.Default) {
-            val page = pageGame(body, url)
-            val games = listGames(body, url)
-            if (page == null && games.isEmpty()) throw WebError("No game or list could be found on that page.")
-            WebFound(page?.title.orEmpty(), page, games)
+        var page = withContext(Dispatchers.Default) { pageGame(body, url) }
+        var games = withContext(Dispatchers.Default) { listGames(body, url) }
+        // Many sites send a bare page and fill the list in with scripts. If little turned up,
+        // look again with the hidden browser, which runs them, and keep whichever found more.
+        if (games.size < 10) {
+            progress("Looking closer…")
+            val shown = PageReader.read(ctx, url, BUILT_SCRIPT, timeoutMs = 25_000)
+            if (shown != null) {
+                val more = withContext(Dispatchers.Default) { listGames(shown, url) }
+                if (more.size > games.size) games = more
+                if (page == null) page = withContext(Dispatchers.Default) { pageGame(shown, url) }
+            }
         }
+        if (page == null && games.isEmpty()) throw WebError("No game or list could be found on that page.")
+        return WebFound(page?.title.orEmpty(), page, games)
     }
 }

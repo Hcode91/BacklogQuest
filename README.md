@@ -36,7 +36,8 @@ In **Games → Wishlist**, **Import CSV** adds games from CSV files such as Moby
 **Import from web** (next to Import CSV) adds games from a web address. You can also tap Share in your browser and choose Backlog Quest ("Add to wishlist").
 
 - **Internet Archive**: a collection, a search or a single item is read through the Archive's own API, so every item comes with its name, picture and link (and its subject tags as genres). Up to 5,000 items are read from one collection or search.
-- **Other sites**: the page is offered as one game (its title and main picture). If it looks like a list, the app also offers the games it found on it. That part is a best guess, so check the list and untick anything that isn't a game.
+- **Other sites**: the page is offered as one game (its title and main picture). If it looks like a list, the app also offers the games linked from it, with or without pictures: it looks for the biggest run of similar links that sit side by side and go to the same sort of page, leaving out menus, paging and links to other sites (a game on its own sub-site, like `author.itch.io`, counts as the same site). If the page builds its list with scripts and a plain read finds little, it looks again in the hidden browser. That part is a best guess, so check the list and untick anything that isn't a game.
+- Games that have no picture on the list can have one fetched from their own page straight after adding (ticked by default), the same way Fetch pictures works for CSV imports.
 - You choose the platform or list name the games are filed under. Adding to a name that already exists adds to that list.
 
 ## Discover
