@@ -23,7 +23,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import com.backlogquest.app.data.WishImport
+import com.backlogquest.app.data.BulkFetch
+import com.backlogquest.app.data.Achievements
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -112,8 +121,16 @@ private fun buildList(
                 is LibItem.Wish -> i.w.title
                 else -> ""
             }
+            fun platform(i: LibItem) = when (i) {
+                is LibItem.Own -> i.g.platform
+                is LibItem.Wish -> i.w.platforms.firstOrNull().orEmpty()
+                else -> ""
+            }
             if (sort == "short") {
                 all.sortedWith(compareBy<LibItem>({ hours(it).let { h -> if (h > 0) h else 1e9 } }, { title(it).lowercase() }))
+            } else if (sort == "platform") {
+                // By platform, then title; games with no platform go to the end.
+                all.sortedWith(compareBy<LibItem>({ platform(it).isBlank() }, { platform(it).lowercase() }, { title(it).lowercase() }))
             } else if (sort == "price") {
                 // Cheapest first; games without a price go to the end.
                 all.sortedWith(compareBy<LibItem>({ s.prices[normTitle(title(it))]?.amount ?: 1e9 }, { title(it).lowercase() }))
@@ -162,11 +179,6 @@ fun GamesScreen(
     }
     val full: androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> GridItemSpan =
         { GridItemSpan(maxLineSpan) }
-    // Imported games in the current view that have a link but no picture yet.
-    val needPictures = remember(rows, vm.wishImages.size) {
-        rows.mapNotNull { (it as? LibItem.Wish)?.w }
-            .filter { it.imported && it.url.isNotBlank() && it.id !in vm.wishImages }.map { it.id }
-    }
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(104.dp),
@@ -197,20 +209,11 @@ fun GamesScreen(
                     if (f.libTab == "wishlist") ChipRow(WISH_TAGS, f.wishTag) { f.wishTag = it }
                     ChipRow(
                         listOf("az" to "A–Z", "short" to "Shortest first") +
-                            if (f.libTab == "wishlist") listOf("price" to "Cheapest first") else emptyList(),
+                            if (f.libTab == "wishlist") listOf("platform" to "Platform", "price" to "Cheapest first") else emptyList(),
                         f.sort,
                     ) { f.sort = it }
                     if (f.libTab == "wishlist") {
-                        if (s.itadKey.isBlank()) {
-                            Hint("Add a free IsThereAnyDeal key in Setup to see prices.")
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                PixelButton(if (vm.priceBusy) "UPDATING…" else "UPDATE PRICES", enabled = !vm.priceBusy) {
-                                    vm.updatePrices(vm.wishlistTitles())
-                                }
-                                Hint(vm.priceMessage, Modifier.weight(1f))
-                            }
-                        }
+                        if (s.itadKey.isBlank()) Hint("Add a free IsThereAnyDeal key in Setup to see prices.")
                         // Your own lists: add CSV files, then fetch a picture for each game from its link.
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -219,15 +222,7 @@ fun GamesScreen(
                             PixelButton("IMPORT CSV") { vm.csvImportOpen = true }
                             PixelButton("IMPORT FROM WEB") { vm.webImport = "" }
                             if (vm.csvLists.isNotEmpty()) PixelButton("FIND DUPLICATES") { vm.duplicatesOpen = true }
-                            if (vm.imageBusy) {
-                                PixelButton("STOP", kind = BtnKind.A) { vm.stopImages() }
-                            } else if (needPictures.isNotEmpty()) {
-                                PixelButton("FETCH ${"%,d".format(needPictures.size)} PICTURES", kind = BtnKind.B) {
-                                    vm.fetchWishImages(needPictures)
-                                }
-                            }
                         }
-                        if (vm.imageMessage.isNotBlank()) Hint(vm.imageMessage)
                     }
                 }
             }
@@ -242,6 +237,7 @@ fun GamesScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        item(span = full) { BulkPanel(vm, f.libTab, rows) }
         if (f.libTab == "wishlist" || f.libTab == "backlog") {
             item(span = full) {
                 val bucket = BUCKETS.firstOrNull { it.first == f.time }?.second
@@ -305,9 +301,11 @@ fun GamesScreen(
                     val c = item.c
                     val meta = listOf(c.platform, fmtDate(c.date)).filter { it.isNotBlank() }.joinToString(" · ")
                     if (f.grid) {
-                        GridCard(c.title, c.platform, "", badge = "#${item.number}", meta = meta) { onEditHistory(item.index) }
+                        val cover = s.histCovers[historyKey(item.index, c)].orEmpty()
+                        GridCard(c.title, c.platform, cover, badge = "#${item.number}", meta = meta) { onEditHistory(item.index) }
                     } else {
-                        ListRow(c.title, c.platform, "", meta, trailing = "#${item.number}", desc = "") { onEditHistory(item.index) }
+                        val cover = s.histCovers[historyKey(item.index, c)].orEmpty()
+                        ListRow(c.title, c.platform, cover, meta, trailing = "#${item.number}", desc = "") { onEditHistory(item.index) }
                     }
                 }
                 is LibItem.Wish -> {
@@ -398,6 +396,132 @@ private fun ListRow(
             if (meta.isNotBlank()) Text(meta, color = BQ.Muted, fontSize = 13.sp)
             if (tags.isNotEmpty()) TagRow(tags)
             if (desc.isNotBlank()) Text(desc, color = BQ.Ink.copy(alpha = 0.8f), fontSize = 13.sp)
+        }
+    }
+}
+
+/** What the games in a list are missing, worked out in the background. */
+private class Missing(
+    val pictures: List<BulkFetch.Pic>,
+    val achievements: List<String>,
+    val prices: List<String>,
+    /** Tried before without a result: keys in notFound, and wishlist ids marked as having no picture. */
+    val triedKeys: Set<String>,
+    val triedWish: Set<String>,
+)
+
+/**
+ * Fill in pictures, achievements or prices for the first few games in the
+ * list as it's shown (sorted, filtered and searched) that don't have them yet.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BulkPanel(vm: BacklogViewModel, tab: String, rows: List<LibItem>) {
+    val s = vm.state
+    var count by rememberSaveable { mutableIntStateOf(10) }
+    val images = vm.wishImages
+    // The last counts stay on screen while new ones are worked out, so the buttons don't flicker.
+    var missing by remember { mutableStateOf<Missing?>(null) }
+    LaunchedEffect(rows, s, images.size) {
+        delay(250)
+        val st = s
+        val pics = images.toMap()
+        missing = withContext(Dispatchers.Default) {
+            val pictures = ArrayList<BulkFetch.Pic>()
+            val achievements = ArrayList<String>()
+            val prices = LinkedHashSet<String>()
+            val triedKeys = HashSet<String>()
+            val triedWish = HashSet<String>()
+            val wantPrices = tab == "wishlist" && st.itadKey.isNotBlank()
+            for (item in rows) {
+                when (item) {
+                    is LibItem.Own -> {
+                        val g = item.g
+                        val pic = BulkFetch.Pic.Own(g.id, g.title)
+                        if (g.cover.isBlank()) {
+                            if (pic.key in st.notFound) triedKeys += pic.key else pictures += pic
+                        }
+                        if (tab != "wishlist" && g.achievements.isEmpty()) {
+                            val key = BulkFetch.achKey(g.id)
+                            if (key in st.notFound) triedKeys += key
+                            else if (Achievements.pickSource(g, deviceName(st, g.device)) != null) achievements += g.id
+                        }
+                        if (wantPrices && st.prices[normTitle(g.title)] == null) {
+                            val key = BulkFetch.priceKey(g.title)
+                            if (key in st.notFound) triedKeys += key else prices += g.title
+                        }
+                    }
+                    is LibItem.Hist -> {
+                        val hk = historyKey(item.index, item.c)
+                        val pic = BulkFetch.Pic.Hist(hk, item.c.title)
+                        if (st.histCovers[hk].isNullOrBlank()) {
+                            if (pic.key in st.notFound) triedKeys += pic.key else pictures += pic
+                        }
+                    }
+                    is LibItem.Wish -> {
+                        val w = item.w
+                        when (pics[w.id]) {
+                            null -> pictures += BulkFetch.Pic.Wish(w.id, w.title, w.url)
+                            WishImport.NO_IMAGE -> triedWish += w.id
+                        }
+                        if (wantPrices && st.prices[normTitle(w.title)] == null) {
+                            val key = BulkFetch.priceKey(w.title)
+                            if (key in st.notFound) triedKeys += key else prices += w.title
+                        }
+                    }
+                }
+            }
+            Missing(pictures, achievements, prices.toList(), triedKeys, triedWish)
+        }
+    }
+    val busy = vm.bulkBusy || vm.imageBusy || vm.priceBusy
+
+    Panel {
+        SectionTitle("FETCH FOR THIS LIST")
+        Hint("Fills in the first games in this list, as sorted and filtered, that are missing them.")
+        ChipRow(BulkFetch.COUNTS.map { it.toString() to if (it == 0) "All" else "First $it" }, count.toString()) { count = it.toInt() }
+        val m = missing
+        when {
+            busy -> {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Hint(
+                        listOf(vm.bulkMessage, vm.imageMessage, vm.priceMessage).firstOrNull { it.isNotBlank() } ?: "Working…",
+                        Modifier.weight(1f),
+                    )
+                    if (!vm.priceBusy) PixelButton("STOP", kind = BtnKind.A) { vm.stopBulk() }
+                }
+            }
+            m == null -> Hint("Counting what's missing…")
+            else -> {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (m.pictures.isNotEmpty()) {
+                        PixelButton("PICTURES · ${BulkFetch.label(count, m.pictures.size)}", kind = BtnKind.B) {
+                            vm.bulkPictures(BulkFetch.first(m.pictures, count))
+                        }
+                    }
+                    if (m.achievements.isNotEmpty()) {
+                        PixelButton("ACHIEVEMENTS · ${BulkFetch.label(count, m.achievements.size)}", kind = BtnKind.B) {
+                            vm.bulkAchievements(BulkFetch.first(m.achievements, count))
+                        }
+                    }
+                    if (m.prices.isNotEmpty()) {
+                        PixelButton("PRICES · ${BulkFetch.label(count, m.prices.size)}", kind = BtnKind.B) {
+                            vm.updatePrices(BulkFetch.first(m.prices, count), bulk = true)
+                        }
+                    }
+                }
+                if (m.pictures.isEmpty() && m.achievements.isEmpty() && m.prices.isEmpty()) {
+                    Hint("Nothing missing in this list" + if (m.triedKeys.isEmpty() && m.triedWish.isEmpty()) "." else ", apart from games tried before.")
+                }
+                val tried = m.triedKeys.size + m.triedWish.size
+                if (tried > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Hint("${"%,d".format(tried)} tried before without a result are skipped.", Modifier.weight(1f))
+                        TabChip("Try them again", false) { vm.forgetNotFound(m.triedKeys, m.triedWish) }
+                    }
+                }
+                listOf(vm.bulkMessage, vm.imageMessage, vm.priceMessage).firstOrNull { it.isNotBlank() }?.let { Hint(it) }
+            }
         }
     }
 }

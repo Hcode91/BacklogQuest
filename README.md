@@ -54,6 +54,16 @@ Every imported list (CSV or web) has a **source**, such as "MobyGames". The impo
 - **Find duplicates** (in the wishlist and in Discover → My sources) lists imported games that are in your wishlist more than once, and imported games you already have. For repeats it keeps one copy (your data file's if there is one, else one with a picture) and ticks the rest for deleting. Games you already have start unticked, in case you want another platform's version. Your data file's own entries are never deleted.
 - Titles are compared ignoring case and punctuation ("Pac-Man" matches "PacMan"). The same title on different platforms counts as different games.
 
+## Fetching for many games at once
+
+Every tab in **Games** has a **Fetch for this list** panel. Choose how many (first 10, 25, 50, 100 or all) and it fills in the first games in the list, as currently sorted, filtered and searched, that are missing:
+
+- **Pictures**: your games and completed games (history included) get box art from HowLongToBeat, or RAWG if you've added a key. Imported wishlist games use their own link; other wishlist games are looked up by title.
+- **Achievements** (Backlog, Playing, Beaten, Dropped): from Steam, RetroAchievements, PSNProfiles or TrueAchievements, chosen by platform, as in a game's own Auto-fill.
+- **Prices** (Wishlist, with an IsThereAnyDeal key).
+
+Games are done one at a time with a short pause, each with a time limit, and the batch stops if a site stops answering three times in a row. Games tried before without a result are skipped next time, so the next press moves on; **Try them again** clears that. The wishlist can also be sorted by **Platform**.
+
 ## If the app crashes
 
 The app keeps a note of why it crashed, and the next time it opens it says so, with a **Copy details** button. Send those details along with a bug report. (A freeze that Android closes with "isn't responding" isn't a crash inside the app, so it can't be caught this way.)
