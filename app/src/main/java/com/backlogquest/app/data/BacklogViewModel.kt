@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -48,14 +49,16 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
             ref.wishlist.filter { it.id !in state.hiddenWish }.map { it.title }
 
     /** Fetches current prices for the given titles from IsThereAnyDeal and saves them. */
-    fun updatePrices(titles: List<String>) {
+    /** [bulk]: titles with no price are remembered, so the next bulk fetch moves on to others. */
+    fun updatePrices(titles: List<String>, bulk: Boolean = false) {
         if (priceBusy || titles.isEmpty()) return
         priceBusy = true
         priceMessage = "Getting prices…"
         viewModelScope.launch {
             try {
                 val found = Prices.lookup(state.itadKey, titles) { m -> viewModelScope.launch { priceMessage = m } }
-                update { it.copy(prices = it.prices + found) }
+                val none = if (bulk) titles.map(::normTitle).filter { it.isNotEmpty() && it !in found }.map { "price:$it" } else emptyList()
+                update { it.copy(prices = it.prices + found, notFound = it.notFound + none) }
                 priceMessage = if (titles.size == 1) {
                     if (found.isEmpty()) "IsThereAnyDeal doesn't sell this game (it covers PC stores)." else ""
                 } else "Prices found for ${found.size} of ${titles.distinct().size} games."
@@ -275,15 +278,16 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removeCsvList(list: CsvList) {
         csvLists = csvLists.filter { it !== list }
+        // Pictures of games only that list had; your other wishlist games keep theirs.
         val kept = csvLists.flatMap { l -> l.games.map { it.id } }.toSet()
-        wishImages.keys.filter { it !in kept }.forEach { wishImages.remove(it) }
+        list.games.map { it.id }.filter { it !in kept }.forEach { wishImages.remove(it) }
         rebuildRef()
         saveImports()
     }
 
     /** Looks up a picture for each of [ids] from that game's link, one at a time. */
     fun fetchWishImages(ids: List<String>, again: Boolean = false) {
-        if (imageBusy) return
+        if (imageBusy || bulkBusy) return
         // Looked up in the lists themselves, which are up to date even while the wishlist is being rebuilt.
         val byId = HashMap<String, CsvGame>()
         csvLists.forEach { l -> l.games.forEach { byId.putIfAbsent(it.id, it) } }
@@ -326,6 +330,191 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
     fun stopImages() {
         imageJob?.cancel()
         imageMessage = "Stopped."
+    }
+
+    // ---------------- Bulk fetching ----------------
+
+    var bulkBusy by mutableStateOf(false)
+        private set
+    var bulkMessage by mutableStateOf("")
+        private set
+    private var bulkJob: Job? = null
+
+    fun stopBulk() {
+        bulkJob?.cancel()
+        imageJob?.cancel()
+        bulkMessage = "Stopped."
+    }
+
+    /** Lets games tried before without a result be tried again. */
+    fun forgetNotFound(keys: Set<String>, wishIds: Set<String>) {
+        update { it.copy(notFound = it.notFound - keys) }
+        wishIds.forEach { if (wishImages[it] == WishImport.NO_IMAGE) wishImages.remove(it) }
+        saveImages()
+    }
+
+    private suspend fun <T> withinLimit(ms: Long, block: suspend () -> T): T? = BulkFetch.withinLimit(viewModelScope, ms, block)
+
+    /**
+     * Box art by title: HowLongToBeat first, then RAWG if you've added a key.
+     * Returns the address, "" when neither has a picture, or null when neither could be reached.
+     */
+    private suspend fun coverByTitle(title: String): String? {
+        var unreachable = false
+        val h = try {
+            Hltb.lookup(title)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            unreachable = true
+            null
+        }
+        h?.cover?.takeIf { it.isNotBlank() }?.let { return it }
+        if (state.rawgKey.isNotBlank()) {
+            return try {
+                Rawg.lookup(state.rawgKey, h?.title ?: title)?.cover.orEmpty()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+        }
+        return if (unreachable) null else ""
+    }
+
+    /** Finds a picture for each of [targets], one at a time with a short pause between. */
+    fun bulkPictures(targets: List<BulkFetch.Pic>) {
+        if (bulkBusy || imageBusy || targets.isEmpty()) return
+        bulkBusy = true
+        bulkMessage = "Fetching pictures…"
+        bulkJob = viewModelScope.launch {
+            var found = 0
+            var failedInARow = 0
+            var stoppedEarly = false
+            var plainWorks = true
+            // Collected and saved in batches, rather than saving everything after every game.
+            val covers = HashMap<String, String>()
+            val hist = HashMap<String, String>()
+            val none = HashSet<String>()
+            fun flush() {
+                if (covers.isEmpty() && hist.isEmpty() && none.isEmpty()) return
+                val c = HashMap(covers)
+                val h = HashMap(hist)
+                val n = HashSet(none)
+                covers.clear()
+                hist.clear()
+                none.clear()
+                update { st ->
+                    st.copy(
+                        games = if (c.isEmpty()) st.games else st.games.map { g -> c[g.id]?.let { g.copy(cover = it) } ?: g },
+                        histCovers = st.histCovers + h,
+                        notFound = st.notFound + n,
+                    )
+                }
+                saveImages()
+            }
+            try {
+                for ((i, t) in targets.withIndex()) {
+                    bulkMessage = "Fetching pictures… ${i + 1} of ${targets.size}"
+                    val result: String? = if (t is BulkFetch.Pic.Wish && t.url.isNotBlank()) {
+                        when (val r = withinLimit(40_000) { WishImport.image(getApplication(), t.url, plainWorks) { plainWorks = false } }) {
+                            is WishImport.Image.Found -> r.address
+                            WishImport.Image.None -> ""
+                            WishImport.Image.Failed, null -> null
+                        }
+                    } else {
+                        withinLimit(30_000) { coverByTitle(t.title) }
+                    }
+                    when {
+                        result == null -> failedInARow++
+                        result.isEmpty() -> {
+                            failedInARow = 0
+                            when (t) {
+                                is BulkFetch.Pic.Wish -> wishImages[t.id] = WishImport.NO_IMAGE
+                                else -> none += t.key
+                            }
+                        }
+                        else -> {
+                            failedInARow = 0
+                            found++
+                            when (t) {
+                                is BulkFetch.Pic.Own -> covers[t.id] = result
+                                is BulkFetch.Pic.Hist -> hist[t.histKey] = result
+                                is BulkFetch.Pic.Wish -> wishImages[t.id] = result
+                            }
+                        }
+                    }
+                    if (failedInARow >= 3) {
+                        stoppedEarly = true
+                        break
+                    }
+                    if ((i + 1) % 10 == 0) flush()
+                    delay(500)
+                }
+                bulkMessage = "Found $found picture${if (found == 1) "" else "s"} for ${targets.size} game${if (targets.size == 1) "" else "s"}." +
+                    if (stoppedEarly) " The site stopped answering, so try again later for the rest." else ""
+            } finally {
+                flush()
+                bulkBusy = false
+            }
+        }
+    }
+
+    /** Looks up achievements or trophies for each of the games in [ids], one at a time. */
+    fun bulkAchievements(ids: List<String>) {
+        if (bulkBusy || ids.isEmpty()) return
+        bulkBusy = true
+        bulkMessage = "Finding achievements…"
+        bulkJob = viewModelScope.launch {
+            var found = 0
+            var failedInARow = 0
+            var stoppedEarly = false
+            try {
+                for ((i, id) in ids.withIndex()) {
+                    val g = state.games.firstOrNull { it.id == id } ?: continue
+                    val device = deviceName(state, g.device)
+                    val source = Achievements.pickSource(g, device)
+                    bulkMessage = "Finding achievements… ${i + 1} of ${ids.size}" + if (source != null) " ($source)" else ""
+                    if (source == null) {
+                        update { it.copy(notFound = it.notFound + BulkFetch.achKey(id)) }
+                        continue
+                    }
+                    try {
+                        val list = withinLimit(45_000) {
+                            Achievements.find(getApplication(), source, g.title, g.platform.ifBlank { device }, state).list
+                        } ?: throw java.io.IOException("No answer in time")
+                        failedInARow = 0
+                        if (list.isEmpty()) {
+                            update { it.copy(notFound = it.notFound + BulkFetch.achKey(id)) }
+                        } else {
+                            found++
+                            update { st ->
+                                st.copy(games = st.games.map {
+                                    if (it.id == id) it.copy(achievements = Achievements.mergeEarned(it.achievements, list), achSource = source) else it
+                                })
+                            }
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Achievements.AchError) {
+                        // The site answered but doesn't have this game.
+                        failedInARow = 0
+                        update { it.copy(notFound = it.notFound + BulkFetch.achKey(id)) }
+                    } catch (e: Exception) {
+                        failedInARow++
+                        if (failedInARow >= 3) {
+                            stoppedEarly = true
+                            break
+                        }
+                    }
+                    delay(800)
+                }
+                bulkMessage = "Found achievements for $found of ${ids.size} game${if (ids.size == 1) "" else "s"}." +
+                    if (stoppedEarly) " The sites stopped answering, so try again later for the rest." else ""
+            } finally {
+                bulkBusy = false
+            }
+        }
     }
 
     // ---------------- Achievement totals ----------------

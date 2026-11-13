@@ -94,6 +94,13 @@ data class AppState(
     val steamProfile: String = "",
     /** Wishlist prices, keyed by normTitle(title). */
     val prices: Map<String, Price> = emptyMap(),
+    /** Pictures found for games in your imported history, by history key. */
+    val histCovers: Map<String, String> = emptyMap(),
+    /**
+     * Things bulk fetching looked for and couldn't find ("pic:g:<id>", "ach:<id>",
+     * "price:<title>"), so the next press moves on to other games.
+     */
+    val notFound: Set<String> = emptySet(),
     /** Your PSN ID, for reading your trophy total from your public PSNProfiles page. */
     val psnId: String = "",
     /** Achievements earned across a whole account, by source ("Steam", "RetroAchievements", "PSNProfiles"). */

@@ -90,7 +90,7 @@ fun EditSheet(vm: BacklogViewModel, target: EditTarget, onDismiss: () -> Unit) {
         Game(
             id = "", title = histEntry.title, device = dev.id, status = "beaten",
             platform = if (histEntry.platform.equals(dev.name, ignoreCase = true)) "" else histEntry.platform,
-            beatenAt = histEntry.date, histKey = histKey,
+            beatenAt = histEntry.date, histKey = histKey, cover = s.histCovers[histKey].orEmpty(),
         )
     } else Game(
         id = "", title = "", device = s.devices.first().id, status = newStatus, beatenAt = today(),

@@ -59,6 +59,8 @@ object Store {
         o.put("steamProfile", s.steamProfile)
         o.put("achTotals", JSONObject().apply { s.achTotals.forEach { (k, v) -> put(k, v) } })
         o.put("achTotalsAt", s.achTotalsAt)
+        o.put("histCovers", JSONObject().apply { s.histCovers.forEach { (k, v) -> put(k, v) } })
+        o.put("notFound", JSONArray().apply { s.notFound.forEach { put(it) } })
         o.put("psnId", s.psnId)
         o.put("prices", JSONObject().apply {
             s.prices.forEach { (k, p) ->
@@ -97,6 +99,10 @@ object Store {
                     a.keys().asSequence().associateWith { a.optInt(it) }
                 } ?: emptyMap(),
                 achTotalsAt = o.str("achTotalsAt"),
+                histCovers = o.optJSONObject("histCovers")?.let { h ->
+                    h.keys().asSequence().associateWith { h.optString(it) }
+                } ?: emptyMap(),
+                notFound = o.optJSONArray("notFound")?.let { a -> (0 until a.length()).map { a.strAt(it) }.toSet() } ?: emptySet(),
                 psnId = o.str("psnId"),
                 prices = o.optJSONObject("prices")?.let { po ->
                     po.keys().asSequence().mapNotNull { k ->
