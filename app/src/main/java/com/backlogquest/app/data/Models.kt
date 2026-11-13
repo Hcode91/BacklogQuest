@@ -94,7 +94,9 @@ data class AppState(
     val steamProfile: String = "",
     /** Wishlist prices, keyed by normTitle(title). */
     val prices: Map<String, Price> = emptyMap(),
-    /** Achievements earned across a whole account, by source ("Steam", "RetroAchievements"). */
+    /** Your PSN ID, for reading your trophy total from your public PSNProfiles page. */
+    val psnId: String = "",
+    /** Achievements earned across a whole account, by source ("Steam", "RetroAchievements", "PSNProfiles"). */
     val achTotals: Map<String, Int> = emptyMap(),
     /** The day those account totals were last fetched. */
     val achTotalsAt: String = "",

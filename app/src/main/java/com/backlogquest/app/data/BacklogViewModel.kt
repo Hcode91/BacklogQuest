@@ -158,16 +158,17 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     /**
-     * Reads how many achievements you've earned across your whole Steam and
-     * RetroAchievements accounts. [quiet] is the once-a-day check when the app opens.
+     * Reads how many achievements you've earned across your whole Steam,
+     * RetroAchievements and PlayStation accounts. [quiet] is the once-a-day check when the app opens.
      */
     fun refreshAchievementTotals(quiet: Boolean = false) {
         if (achBusy) return
         val s = state
         val steam = AchievementTotals.canReadSteam(s)
         val retro = AchievementTotals.canReadRetro(s)
-        if (!steam && !retro) {
-            if (!quiet) achMessage = "Add your Steam or RetroAchievements details in Setup → Achievements first."
+        val psn = AchievementTotals.canReadPsn(s)
+        if (!steam && !retro && !psn) {
+            if (!quiet) achMessage = "Add your Steam, RetroAchievements or PSN details in Setup → Achievements first."
             return
         }
         achBusy = true
@@ -182,6 +183,15 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
                     problems += e.message ?: "RetroAchievements couldn't be reached."
                 } catch (e: Exception) {
                     problems += "RetroAchievements couldn't be reached."
+                }
+            }
+            if (psn) {
+                try {
+                    found[Achievements.PSN] = AchievementTotals.psn(getApplication(), s)
+                } catch (e: AchievementTotals.TotalsError) {
+                    problems += e.message ?: "PlayStation trophies couldn't be read."
+                } catch (e: Exception) {
+                    problems += "PlayStation trophies couldn't be read."
                 }
             }
             if (steam) {

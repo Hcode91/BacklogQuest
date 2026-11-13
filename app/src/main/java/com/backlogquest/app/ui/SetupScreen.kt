@@ -46,7 +46,7 @@ private val SETUP_TILES = listOf(
     Triple("count", "EXTRA COUNT", "Completions missing from your history"),
     Triple("autofill", "AUTO-FILL", "Box art, genre and length for new games"),
     Triple("playtime", "PLAY TIME", "Measure sessions and read hours from Steam"),
-    Triple("achievements", "ACHIEVEMENTS", "Steam and RetroAchievements details"),
+    Triple("achievements", "ACHIEVEMENTS", "Steam, RetroAchievements and PSN details"),
     Triple("prices", "PRICES", "Wishlist prices from IsThereAnyDeal"),
     Triple("stores", "IMPORT FROM STORES", "Bring in your libraries"),
     Triple("devices", "DEVICES", "What you play on, and the two-for-two rule"),
@@ -65,6 +65,7 @@ fun SetupScreen(vm: BacklogViewModel) {
     var itadText by remember { mutableStateOf(s.itadKey) }
     var steamKeyText by remember { mutableStateOf(s.steamKey) }
     var steamProfileText by remember { mutableStateOf(s.steamProfile) }
+    var psnText by remember { mutableStateOf(s.psnId) }
     var newDevice by remember { mutableStateOf("") }
     var confirmReplace by remember { mutableStateOf(false) }
     // Which part of Setup is open; null shows the tiles.
@@ -275,6 +276,17 @@ fun SetupScreen(vm: BacklogViewModel) {
                     value = raKeyText,
                     onValueChange = { t -> raKeyText = t; vm.update { it.copy(raKey = t.trim()) } },
                     label = { Text("RetroAchievements web API key") },
+                    singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
+                )
+                Hint(
+                    "PlayStation total: add your PSN ID and your trophy count is read from your public " +
+                        "PSNProfiles page (psnprofiles.com/your-id). It shows what that site last recorded, " +
+                        "so tap Update on your profile there after earning trophies. No password or token needed.",
+                )
+                OutlinedTextField(
+                    value = psnText,
+                    onValueChange = { t -> psnText = t; vm.update { it.copy(psnId = t.trim()) } },
+                    label = { Text("PSN ID (optional)") },
                     singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
                 )
             }

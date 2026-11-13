@@ -19,7 +19,7 @@ The app downloads `backlog-data.json` from this repo (the root of the `main` bra
 - **Profile**: stats and the trophy room.
 - **Setup**: a grid of tiles; tap one to open that part.
 
-The status panel's achievements figure is everything you've earned: your whole Steam and RetroAchievements accounts (with the details from **Setup → Achievements**), plus PlayStation and Xbox trophies you've ticked on games in the app. The accounts are re-read once a day when the app opens, or with **Recount** in Profile. Steam only answers one game at a time, so the first count can take a minute; after that only games you've played since are re-checked.
+The status panel's achievements figure is everything you've earned: your whole Steam and RetroAchievements accounts and your PlayStation trophy total (with the details from **Setup → Achievements**), plus Xbox achievements you've ticked on games in the app. The PlayStation figure is read from your public PSNProfiles page using just your PSN ID, so it shows what that site last recorded; update your profile there after earning trophies. The accounts are re-read once a day when the app opens, or with **Recount** in Profile. Steam only answers one game at a time, so the first count can take a minute; after that only games you've played since are re-checked.
 
 ## Discover
 
