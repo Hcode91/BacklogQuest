@@ -3,11 +3,14 @@ package com.backlogquest.app.data
 import android.app.Application
 import android.net.Uri
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -150,6 +153,98 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ---------------- Wishlist games imported from CSV lists ----------------
+
+    /** What the data file gave, before imported CSV lists are added on top. */
+    private var fileRef = RefData.EMPTY
+
+    /** The CSV lists you've imported, one per platform. */
+    var csvLists by mutableStateOf<List<CsvList>>(emptyList())
+        private set
+
+    /** Pictures found for imported games, by game id. */
+    val wishImages = mutableStateMapOf<String, String>()
+
+    var imageBusy by mutableStateOf(false)
+        private set
+    var imageMessage by mutableStateOf("")
+        private set
+    private var imageJob: Job? = null
+
+    /** The picture for a wishlist game, or "" when there isn't one (yet). */
+    fun wishImage(id: String): String = wishImages[id].orEmpty().takeIf { it != WishImport.NO_IMAGE }.orEmpty()
+
+    private fun rebuildRef() {
+        ref = RefData(fileRef.history, WishImport.wishItems(csvLists) + fileRef.wishlist, fileRef.exportedAt)
+    }
+
+    private fun saveImports() {
+        val lists = csvLists
+        val images = wishImages.toMap()
+        viewModelScope.launch(Dispatchers.IO) { synchronized(wishImages) { WishImport.save(dir, lists, images) } }
+    }
+
+    fun importCsv(lists: List<CsvList>) {
+        csvLists = WishImport.merge(csvLists, lists)
+        rebuildRef()
+        saveImports()
+        val games = lists.sumOf { it.games.size }
+        showToast("IMPORTED ${"%,d".format(games)} GAME${if (games == 1) "" else "S"}\n${lists.joinToString(", ") { it.platform }}")
+    }
+
+    fun removeCsvList(platform: String) {
+        csvLists = csvLists.filter { it.platform != platform }
+        val kept = csvLists.flatMap { l -> l.games.map { it.id } }.toSet()
+        wishImages.keys.filter { it !in kept }.forEach { wishImages.remove(it) }
+        rebuildRef()
+        saveImports()
+    }
+
+    /** Looks up a picture for each of [ids] from that game's link, one at a time. */
+    fun fetchWishImages(ids: List<String>, again: Boolean = false) {
+        if (imageBusy) return
+        val byId = ref.wishlist.filter { it.imported }.associateBy { it.id }
+        val todo = ids.mapNotNull { byId[it] }.filter { it.url.isNotBlank() && (again || it.id !in wishImages) }
+        if (todo.isEmpty()) {
+            imageMessage = "Nothing to fetch: these games already have a picture or have no link."
+            return
+        }
+        imageBusy = true
+        imageJob = viewModelScope.launch {
+            var found = 0
+            var failedInARow = 0
+            var plainWorks = true
+            var stoppedEarly = false
+            try {
+                for ((i, w) in todo.withIndex()) {
+                    imageMessage = "Fetching pictures… ${i + 1} of ${todo.size}"
+                    when (val r = WishImport.image(getApplication(), w.url, plainWorks) { plainWorks = false }) {
+                        is WishImport.Image.Found -> { wishImages[w.id] = r.address; found++; failedInARow = 0 }
+                        WishImport.Image.None -> { wishImages[w.id] = WishImport.NO_IMAGE; failedInARow = 0 }
+                        WishImport.Image.Failed -> failedInARow++
+                    }
+                    if (failedInARow >= 3) {
+                        stoppedEarly = true
+                        break
+                    }
+                    if ((i + 1) % 10 == 0) saveImports()
+                    // A short pause between pages, to go easy on the site.
+                    delay(600)
+                }
+                imageMessage = "Found $found picture${if (found == 1) "" else "s"}." +
+                    if (stoppedEarly) " The site stopped answering, so try again later for the rest." else ""
+            } finally {
+                saveImports()
+                imageBusy = false
+            }
+        }
+    }
+
+    fun stopImages() {
+        imageJob?.cancel()
+        imageMessage = "Stopped."
+    }
+
     // ---------------- Achievement totals ----------------
 
     var achBusy by mutableStateOf(false)
@@ -230,9 +325,13 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (saved != null) state = saved
             if (file != null) {
-                ref = file.ref
+                fileRef = file.ref
                 fileState = file.state
             }
+            val (lists, images) = withContext(Dispatchers.IO) { WishImport.load(dir) }
+            csvLists = lists
+            wishImages.putAll(images)
+            rebuildRef()
             loaded = true
             pendingPlay?.let { pendingPlay = null; play(it) }
             // Once a day, quietly bring the account-wide achievement count up to date.
@@ -268,7 +367,8 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
                     Store.saveDataFile(dir, text)
                     p
                 }
-                ref = parsed.ref
+                fileRef = parsed.ref
+                rebuildRef()
                 fileState = parsed.state
                 val imported = parsed.state
                 // On a fresh install, take your games and devices from the file too.

@@ -1,5 +1,7 @@
 package com.backlogquest.app.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,6 +28,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import com.backlogquest.app.data.WishImport
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -733,10 +736,41 @@ fun WishSheet(vm: BacklogViewModel, id: String, onDismiss: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             SectionTitle(w.title)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(fmtHours(w.hours), color = BQ.B, fontFamily = BQ.Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Spacer(Modifier.width(6.dp))
-                Hint("main story" + if (w.coopHours > 0) " · ${fmtHours(w.coopHours)} co-op" else "")
+            if (w.imported) {
+                // From one of your CSV lists: picture, genres and the link it came with.
+                val picture = vm.wishImage(w.id)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Cover(w.title, w.platforms.firstOrNull().orEmpty(), picture, Modifier.width(110.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (w.genres.isNotEmpty()) Hint(w.genres.joinToString(", "))
+                        if (w.url.isNotBlank()) {
+                            PixelButton(
+                                when {
+                                    vm.imageBusy -> "FETCHING…"
+                                    picture.isBlank() -> "FETCH PICTURE"
+                                    else -> "FETCH AGAIN"
+                                },
+                                enabled = !vm.imageBusy,
+                            ) { vm.fetchWishImages(listOf(w.id), again = true) }
+                            val context = LocalContext.current
+                            PixelButton("OPEN LINK ↗") {
+                                try {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(w.url)))
+                                } catch (e: Exception) {
+                                    vm.showToast("No browser available")
+                                }
+                            }
+                        }
+                        if (vm.wishImages[w.id] == WishImport.NO_IMAGE) Hint("No picture on the linked page.")
+                    }
+                }
+            }
+            if (!w.imported || w.hours > 0) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(fmtHours(w.hours), color = BQ.B, fontFamily = BQ.Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Spacer(Modifier.width(6.dp))
+                    Hint("main story" + if (w.coopHours > 0) " · ${fmtHours(w.coopHours)} co-op" else "")
+                }
             }
             Hint(w.platforms.joinToString(", ").ifBlank { "Platform unknown" })
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -791,6 +825,7 @@ fun WishSheet(vm: BacklogViewModel, id: String, onDismiss: () -> Unit) {
                 PixelButton("GOT IT → BACKLOG", kind = BtnKind.A) {
                     val g = Game(
                         id = newId(), title = w.title, device = device, status = "backlog", platform = platform,
+                        genre = w.genres.firstOrNull().orEmpty(), cover = vm.wishImage(w.id),
                         est = if (w.hours > 0) w.hours else 0.0,
                         estSource = if (w.hours > 0) "hltb" else "",
                         addedAt = today(), order = System.currentTimeMillis(),

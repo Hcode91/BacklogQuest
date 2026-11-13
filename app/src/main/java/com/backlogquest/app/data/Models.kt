@@ -121,6 +121,11 @@ data class WishItem(
     val unmarked: Boolean,
     /** "PlayStation 3|4TB;Nintendo 64|4TB" style, or empty. */
     val onDrive: String,
+    /** The game's web page, for games imported from a CSV list. */
+    val url: String = "",
+    val genres: List<String> = emptyList(),
+    /** True for games that came from a CSV list you imported. */
+    val imported: Boolean = false,
 )
 
 /**
