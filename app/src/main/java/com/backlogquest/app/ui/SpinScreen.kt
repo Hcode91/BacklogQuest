@@ -60,6 +60,7 @@ import com.backlogquest.app.data.Device
 import com.backlogquest.app.data.Game
 import com.backlogquest.app.data.RotationState
 import com.backlogquest.app.data.WISH_TAGS
+import com.backlogquest.app.data.WishImport
 import com.backlogquest.app.data.WishItem
 import com.backlogquest.app.data.deviceName
 import com.backlogquest.app.data.fmtHours
@@ -386,7 +387,9 @@ private fun rememberSavedCatalogues(shelf: ShelfViewModel, key: Any?): Map<Strin
 private fun wishPool(vm: BacklogViewModel, tag: String): List<WishItem> {
     val hidden = vm.state.hiddenWish
     val t = if (tag == "unreleased") "all" else tag
-    return vm.ref.wishlist.filter { it.id !in hidden && "unreleased" !in it.tags && wishTagOk(it, t) }
+    return vm.ref.wishlist.filter {
+        it.id !in hidden && "unreleased" !in it.tags && wishTagOk(it, t) && (t == "imported" || !it.imported)
+    }
 }
 
 @Composable
@@ -401,7 +404,8 @@ private fun SomethingNew(
     val disabled by shelf.disabled.collectAsStateWithLifecycle()
     val spinner = rememberSpinner()
     var pool by rememberSaveable { mutableStateOf("all") }
-    // Filters for your imported CSV lists.
+    // Filters for your own sources.
+    var mineSource by rememberSaveable { mutableStateOf("") }
     var genre by rememberSaveable { mutableStateOf("") }
     var platform by rememberSaveable { mutableStateOf("") }
     var wishPick by rememberSaveable { mutableStateOf<String?>(null) }
@@ -413,9 +417,13 @@ private fun SomethingNew(
     val catalogueGames = catalogues.sumOf { saved[it] ?: 0 }
     val wishes = remember(vm.ref, vm.state.hiddenWish, f.wishTag) { wishPool(vm, f.wishTag) }
     val imported = remember(vm.ref, vm.state.hiddenWish) { wishPool(vm, "imported") }
-    val platforms = remember(imported) { imported.flatMap { it.platforms }.distinct().sorted() }
-    val onPlatform = remember(imported, platform) {
-        if (platform.isBlank()) imported else imported.filter { platform in it.platforms }
+    val mySources = remember(imported) { imported.groupBy { it.source }.keys.sortedBy { it.lowercase() } }
+    val inSource = remember(imported, mineSource) {
+        if (mineSource.isBlank()) imported else imported.filter { it.source == mineSource }
+    }
+    val platforms = remember(inSource) { inSource.flatMap { it.platforms }.distinct().sorted() }
+    val onPlatform = remember(inSource, platform) {
+        if (platform.isBlank()) inSource else inSource.filter { platform in it.platforms }
     }
     // Genres on the chosen platform, most common first.
     val genres = remember(onPlatform) {
@@ -427,17 +435,24 @@ private fun SomethingNew(
     }
     val wish = wishPick?.let { id -> vm.ref.wishlist.firstOrNull { it.id == id } }
 
-    Hint("One spin for a game you don't own yet: from your wishlist, or from the homebrew and free-game catalogues in Discover.")
+    Hint("One spin for a game you don't own yet: from your wishlist, your own sources, or the homebrew and free-game catalogues in Discover.")
     ChipRow(
         listOf(
             "all" to "Everything",
             "wishlist" to "Wishlist ${"%,d".format(wishes.size)}",
             "discover" to "Homebrew & free ${"%,d".format(catalogueGames)}",
-        ) + if (imported.isEmpty()) emptyList() else listOf("imported" to "My lists ${"%,d".format(imported.size)}"),
+        ) + if (imported.isEmpty()) emptyList() else listOf("imported" to "My sources ${"%,d".format(imported.size)}"),
         pool,
     ) { pool = it }
     if (pool == "imported") {
-        // Your CSV lists can be narrowed to one platform and one genre.
+        // Your own sources can be narrowed to one source, one platform and one genre.
+        if (mySources.size > 1) {
+            ChipRow(listOf("" to "Any source") + mySources.map { it to it }, mineSource) {
+                mineSource = it
+                platform = ""
+                genre = ""
+            }
+        }
         if (platforms.size > 1) {
             ChipRow(listOf("" to "Any platform") + platforms.map { it to it }, platform) {
                 platform = it
@@ -455,20 +470,22 @@ private fun SomethingNew(
 
     val canWish = (pool == "all" || pool == "wishlist") && wishes.isNotEmpty()
     val canShelf = (pool == "all" || pool == "discover") && catalogues.isNotEmpty()
-    val canImported = pool == "imported" && importedPool.isNotEmpty()
+    // Your sources: the filtered ones in My sources, or all of them in Everything.
+    val minePool = if (pool == "imported") importedPool else imported
+    val canImported = (pool == "imported" || pool == "all") && minePool.isNotEmpty()
     PixelButton(
         "SPIN", Modifier.fillMaxWidth(), kind = BtnKind.A,
         enabled = (canWish || canShelf || canImported) && !spinner.busy,
     ) {
-        // With both on the table it's a coin toss, so the huge wishlist doesn't drown out the catalogues.
-        val fromShelf = if (canWish && canShelf) Random.nextBoolean() else canShelf
+        // With several kinds on the table each gets an equal chance, so the huge wishlist doesn't drown out the rest.
+        val from = listOfNotNull("wish".takeIf { canWish }, "shelf".takeIf { canShelf }, "mine".takeIf { canImported }).random()
         spinner.go {
-            if (canImported) {
-                val pick = importedPool.random()
-                flick(flickNames(importedPool, pick) { it.title }) { slotText = it }
+            if (from == "mine") {
+                val pick = minePool.random()
+                flick(flickNames(minePool, pick) { it.title }) { slotText = it }
                 wishPick = pick.id
                 shelfPick = null
-            } else if (fromShelf) {
+            } else if (from == "shelf") {
                 val rows = shelf.graph.db.shelf().randomCached(catalogues, 15).map(shelf.graph.repository::decode)
                 val pick = rows.lastOrNull() ?: return@go
                 flick(rows.map { it.title }) { slotText = it }
@@ -495,6 +512,8 @@ private fun SomethingNew(
 private sealed class Source(val key: String, val label: String) {
     class OnDevice(val device: Device) : Source("device:${device.id}", device.name)
     object Wishlist : Source("wishlist", "Wishlist")
+    /** One of your imported sources, such as MobyGames. */
+    class Mine(name: String, val games: List<WishItem>) : Source("mine:$name", name)
     class Catalogue(name: String, val providers: List<GameProvider>) : Source("catalogue:$name", name)
 }
 
@@ -517,12 +536,13 @@ private fun WhereFrom(
     var slotText by remember { mutableStateOf<String?>(null) }
 
     val wishes = remember(vm.ref, s.hiddenWish) { wishPool(vm, "all") }
-    val sources: List<Source> = remember(s, wishes.size, disabled) {
+    val sources: List<Source> = remember(s, vm.ref, wishes.size, disabled) {
         val devices = s.devices.filter { backlogPool(s, it.id).isNotEmpty() }.map { Source.OnDevice(it) }
         val wishlist = if (wishes.isNotEmpty()) listOf(Source.Wishlist) else emptyList()
+        val mine = WishImport.sources(vm.ref.wishlist, s.hiddenWish).map { (name, games) -> Source.Mine(name, games) }
         val catalogues = shelf.graph.registry.providers.filter { it.id !in disabled }
             .groupBy { sourceName(it.name) }.map { (name, group) -> Source.Catalogue(name, group) }
-        devices + wishlist + catalogues
+        devices + wishlist + mine + catalogues
     }
     fun usable(src: Source) = src !is Source.OnDevice || (rot[src.device.id]?.cool ?: 0) == 0
     val eligible = sources.filter(::usable)
@@ -538,7 +558,7 @@ private fun WhereFrom(
         slotText = null
     }
 
-    Hint("Spin once for a source, then again for a game from it. Your devices, your wishlist and every Discover source are on the wheel.")
+    Hint("Spin once for a source, then again for a game from it. Your devices, your wishlist, your own sources and every Discover source are on the wheel.")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Stage("1 · SOURCE", source?.label ?: "—", done = source != null, Modifier.weight(1f))
         Stage("2 · GAME", resultTitle ?: "—", done = resultTitle != null, Modifier.weight(1f))
@@ -569,6 +589,14 @@ private fun WhereFrom(
                         clearGame()
                         flick(flickNames(pool, g) { it.title }) { slotText = it }
                         pickedGame = g.id
+                    }
+                }
+                is Source.Mine -> {
+                    val w = source.games.random()
+                    spinner.go {
+                        clearGame()
+                        flick(flickNames(source.games, w) { it.title }) { slotText = it }
+                        wishPick = w.id
                     }
                 }
                 Source.Wishlist -> {
@@ -673,7 +701,7 @@ private fun WishPick(vm: BacklogViewModel, wish: WishItem, onOpenWish: (String) 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Cover(wish.title, wish.platforms.firstOrNull().orEmpty(), vm.wishImage(wish.id), Modifier.width(96.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                StatusLabel(if (wish.imported) "FROM YOUR LISTS" else "FROM YOUR WISHLIST", BQ.OwnBg, BQ.B)
+                StatusLabel(if (wish.imported) "FROM ${wish.source.uppercase()}" else "FROM YOUR WISHLIST", BQ.OwnBg, BQ.B)
                 if (wish.genres.isNotEmpty()) Hint(wish.genres.joinToString(", "))
                 if (wish.hours > 0) {
                     Text(

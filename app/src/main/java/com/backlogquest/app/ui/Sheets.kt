@@ -742,6 +742,7 @@ fun WishSheet(vm: BacklogViewModel, id: String, onDismiss: () -> Unit) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Cover(w.title, w.platforms.firstOrNull().orEmpty(), picture, Modifier.width(110.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (w.source.isNotBlank()) Hint("Source: ${w.source}")
                         if (w.genres.isNotEmpty()) Hint(w.genres.joinToString(", "))
                         if (w.url.isNotBlank()) {
                             PixelButton(

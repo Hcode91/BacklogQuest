@@ -124,8 +124,10 @@ data class WishItem(
     /** The game's web page, for games imported from a CSV list. */
     val url: String = "",
     val genres: List<String> = emptyList(),
-    /** True for games that came from a CSV list you imported. */
+    /** True for games that came from a CSV list or web page you imported. */
     val imported: Boolean = false,
+    /** For imported games: the source they're shown under in Discover and on the Spin wheel. */
+    val source: String = "",
 )
 
 /**

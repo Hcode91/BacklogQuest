@@ -82,6 +82,22 @@ fun PixelButton(
     }
 }
 
+/** A row with a tick box, for options such as "skip games you already have". */
+@Composable
+fun CheckRow(title: String, detail: String = "", checked: Boolean, onToggle: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(if (checked) "☑" else "☐", color = if (checked) BQ.B else BQ.Muted, fontSize = 20.sp)
+        Column(Modifier.weight(1f)) {
+            Text(title, color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            if (detail.isNotBlank()) Hint(detail)
+        }
+    }
+}
+
 /** A tappable tile in the console look, used for the grids across the app. */
 @Composable
 fun Tile(

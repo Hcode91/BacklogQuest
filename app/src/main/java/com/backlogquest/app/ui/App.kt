@@ -149,6 +149,7 @@ fun BacklogApp(vm: BacklogViewModel) {
                     )
                     Tab.DISCOVER -> DiscoverScreen(
                         discoverNav, discoverSaved, toast = { vm.toast = it }, onAddToBacklog = addFromDiscover,
+                        bq = vm, onOpenWish = { wishOpen = it },
                     )
                     Tab.PROFILE -> ProfileScreen(vm)
                     Tab.SETUP -> SetupScreen(vm)
@@ -163,6 +164,8 @@ fun BacklogApp(vm: BacklogViewModel) {
     wishOpen?.let { id -> WishSheet(vm, id, onDismiss = { wishOpen = null }) }
     // Opened from Games → Wishlist, or by sharing a page to the app from a browser.
     vm.webImport?.let { address -> WebImportSheet(vm, address, onDismiss = { vm.webImport = null }) }
+    if (vm.csvImportOpen) CsvImportSheet(vm) { vm.csvImportOpen = false }
+    if (vm.duplicatesOpen) DuplicatesSheet(vm) { vm.duplicatesOpen = false }
     SessionDialog(vm)
 }
 

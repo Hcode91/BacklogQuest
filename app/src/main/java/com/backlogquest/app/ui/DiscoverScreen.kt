@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -68,6 +70,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.imageLoader
+import com.backlogquest.app.data.BacklogViewModel
+import com.backlogquest.app.data.WishItem
 import com.backlogquest.app.discover.Consoles
 import com.backlogquest.app.discover.DownloadRecord
 import com.backlogquest.app.discover.Game
@@ -134,6 +138,8 @@ fun DiscoverScreen(
     saved: SaveableStateHolder,
     toast: (String) -> Unit,
     onAddToBacklog: (Game) -> Unit,
+    bq: BacklogViewModel,
+    onOpenWish: (String) -> Unit,
 ) {
     // Created the first time the tab is opened, then kept for as long as the app is open.
     val vm: ShelfViewModel = viewModel()
@@ -149,7 +155,8 @@ fun DiscoverScreen(
                 val place = nav.current
                 saved.SaveableStateProvider(place) {
                     when {
-                        place == DiscoverNav.HOME -> HomeScreen(vm, nav)
+                        place == DiscoverNav.HOME -> HomeScreen(vm, nav, bq)
+                        place.startsWith("mine/") -> MySourceScreen(Uri.decode(place.removePrefix("mine/")), bq, onOpenWish)
                         place == DiscoverNav.SEARCH -> SearchScreen(vm, nav)
                         place == DiscoverNav.SAVED -> SavedScreen(vm, nav)
                         place == DiscoverNav.DOWNLOADS -> DownloadsScreen(vm)
@@ -212,6 +219,7 @@ private fun placeTitle(place: String, vm: ShelfViewModel): String = when {
         Consoles.all.firstOrNull { it.id == place.removePrefix("console/") }?.name?.uppercase() ?: "SOURCES"
     place.startsWith("catalogue/") ->
         vm.graph.registry.providers.firstOrNull { it.id == place.substringAfterLast('/') }?.name?.uppercase() ?: "CATALOGUE"
+    place.startsWith("mine/") -> Uri.decode(place.removePrefix("mine/")).uppercase()
     else -> "GAME DETAILS"
 }
 
@@ -224,9 +232,11 @@ private val gridPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, 
 
 // ───────────────────────── Browse ─────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HomeScreen(vm: ShelfViewModel, nav: DiscoverNav) {
+private fun HomeScreen(vm: ShelfViewModel, nav: DiscoverNav, bq: BacklogViewModel) {
     val recent by vm.recent.collectAsStateWithLifecycle()
+    val mine = remember(bq.ref, bq.state.hiddenWish) { bq.mySources() }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(148.dp),
         contentPadding = gridPadding,
@@ -235,6 +245,28 @@ private fun HomeScreen(vm: ShelfViewModel, nav: DiscoverNav) {
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Intro("Small games. New worlds.", "Choose a console, pick a community source, and find something new for the backlog.")
+        }
+        // Your own sources: lists you've imported from CSV files or web pages.
+        item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle("MY SOURCES", Modifier.padding(top = 8.dp)) }
+        items(mine, key = { "mine-${it.first}" }) { (name, games) ->
+            Card(onClick = { nav.open("mine/" + Uri.encode(name)) }) {
+                Text(name, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("${"%,d".format(games.size)} game${if (games.size == 1) "" else "s"}", color = BQ.B, fontFamily = BQ.Mono, fontSize = 12.sp)
+                val platforms = games.flatMap { it.platforms }.distinct()
+                if (platforms.isNotEmpty()) {
+                    Text(platforms.joinToString(", "), color = BQ.Muted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (mine.isEmpty()) Hint("Add your own: import a CSV list or a web page and it appears here as a source.")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PixelButton("IMPORT CSV") { bq.csvImportOpen = true }
+                    PixelButton("IMPORT FROM WEB") { bq.webImport = "" }
+                    if (mine.isNotEmpty()) PixelButton("FIND DUPLICATES") { bq.duplicatesOpen = true }
+                }
+            }
         }
         Consoles.all.groupBy { it.family }.forEach { (family, consoles) ->
             item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle(family.uppercase(), Modifier.padding(top = 8.dp)) }
@@ -597,6 +629,104 @@ private fun DiscoverSettingsScreen(vm: ShelfViewModel) {
                     Hint(p.attribution)
                     TabChip("${p.name} ↗", false) { openWebsite(context, p.website) }
                 }
+            }
+        }
+    }
+}
+
+// ───────────────────────── My sources ─────────────────────────
+
+/** One of your imported sources: its games as tiles, with platform, genre and search filters. */
+@Composable
+private fun MySourceScreen(source: String, bq: BacklogViewModel, onOpenWish: (String) -> Unit) {
+    val games = remember(bq.ref, bq.state.hiddenWish, source) {
+        bq.mySources().firstOrNull { it.first == source }?.second.orEmpty().sortedBy { it.title.lowercase() }
+    }
+    var platform by rememberSaveable(source) { mutableStateOf("") }
+    var genre by rememberSaveable(source) { mutableStateOf("") }
+    var search by rememberSaveable(source) { mutableStateOf("") }
+    var shown by rememberSaveable(source) { mutableIntStateOf(PAGE) }
+    val platforms = remember(games) { games.flatMap { it.platforms }.distinct().sorted() }
+    val onPlatform = remember(games, platform) { if (platform.isBlank()) games else games.filter { platform in it.platforms } }
+    // Genres on the chosen platform, most common first.
+    val genres = remember(onPlatform) {
+        onPlatform.flatMap { it.genres }.groupingBy { it }.eachCount().entries
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key }).map { it.key }
+    }
+    val matches = remember(onPlatform, genre, search) {
+        onPlatform.filter { (genre.isBlank() || genre in it.genres) && (search.isBlank() || it.title.contains(search.trim(), ignoreCase = true)) }
+    }
+    val visible = matches.take(shown)
+    val needPictures = remember(matches, bq.wishImages.size) {
+        matches.filter { it.url.isNotBlank() && it.id !in bq.wishImages }.map { it.id }
+    }
+
+    if (games.isEmpty()) {
+        EmptyState("Nothing here", "This source has no games left. Import a list to add some.")
+        return
+    }
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = search,
+                onValueChange = { search = it; shown = PAGE },
+                placeholder = { Text("Search $source") },
+                singleLine = true,
+                colors = bqFieldColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (platforms.size > 1) {
+                    Choice(platform.ifBlank { "All platforms" }, listOf("All platforms") + platforms) {
+                        platform = if (it == "All platforms") "" else it; genre = ""; shown = PAGE
+                    }
+                }
+                if (genres.isNotEmpty()) {
+                    Choice(genre.ifBlank { "All genres" }, listOf("All genres") + genres) {
+                        genre = if (it == "All genres") "" else it; shown = PAGE
+                    }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Hint("${"%,d".format(matches.size)} game${if (matches.size == 1) "" else "s"}", Modifier.weight(1f))
+                if (bq.imageBusy) {
+                    PixelButton("STOP", kind = BtnKind.A) { bq.stopImages() }
+                } else if (needPictures.isNotEmpty()) {
+                    PixelButton("FETCH ${"%,d".format(needPictures.size)} PICTURES", kind = BtnKind.B) { bq.fetchWishImages(needPictures) }
+                }
+            }
+            if (bq.imageMessage.isNotBlank()) Hint(bq.imageMessage)
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(148.dp),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (visible.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+                EmptyState("No games found", "Try another search, platform or genre.")
+            }
+            items(visible, key = { it.id }) { w -> MineCard(w, bq.wishImage(w.id)) { onOpenWish(w.id) } }
+            if (visible.size < matches.size) item(span = { GridItemSpan(maxLineSpan) }) {
+                PixelButton("LOAD MORE · ${visible.size} OF ${matches.size}", Modifier.fillMaxWidth()) { shown += PAGE }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MineCard(w: WishItem, picture: String, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(10.dp)
+    Column(Modifier.fillMaxWidth().clip(shape).background(BQ.Shell2).border(1.dp, BQ.Edge, shape).clickable(onClick = onClick)) {
+        Artwork(picture, w.title, Modifier.fillMaxWidth().height(150.dp))
+        Column(Modifier.padding(12.dp)) {
+            Text(w.title, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (w.platforms.isNotEmpty()) {
+                Text(w.platforms.joinToString(", "), color = BQ.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            w.genres.firstOrNull()?.let {
+                Text(it, color = BQ.B, fontFamily = BQ.Mono, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

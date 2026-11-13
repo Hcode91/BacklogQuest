@@ -162,6 +162,28 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
     var csvLists by mutableStateOf<List<CsvList>>(emptyList())
         private set
 
+    /** True while the Import CSV sheet is open (it can be opened from Games or Discover). */
+    var csvImportOpen by mutableStateOf(false)
+
+    /** Your imported sources, with their games, biggest first. */
+    fun mySources(): List<Pair<String, List<WishItem>>> = WishImport.sources(ref.wishlist, state.hiddenWish)
+
+    /** True while the Duplicates sheet is open. */
+    var duplicatesOpen by mutableStateOf(false)
+
+    /** For checking games about to be imported against your wishlist and games. */
+    fun duplicateIndex(): Duplicates.Index =
+        Duplicates.Index(ref.wishlist, state.hiddenWish, Duplicates.libraryTitles(state, ref))
+
+    /** Deletes imported games (from every list they're in) along with their pictures. */
+    fun removeImported(ids: Set<String>) {
+        if (ids.isEmpty()) return
+        csvLists = csvLists.map { l -> l.copy(games = l.games.filter { it.id !in ids }) }.filter { it.games.isNotEmpty() }
+        ids.forEach { wishImages.remove(it) }
+        rebuildRef()
+        saveImports()
+    }
+
     /** Pictures found for imported games, by game id. */
     val wishImages = mutableStateMapOf<String, String>()
 
@@ -189,7 +211,8 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
         rebuildRef()
         saveImports()
         val games = lists.sumOf { it.games.size }
-        showToast("IMPORTED ${"%,d".format(games)} GAME${if (games == 1) "" else "S"}\n${lists.joinToString(", ") { it.platform }}")
+        val where = lists.map { WishImport.sourceOf(it) }.distinct().joinToString(", ")
+        showToast("IMPORTED ${"%,d".format(games)} GAME${if (games == 1) "" else "S"}\n$where")
     }
 
     /**
@@ -199,19 +222,24 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
     var webImport by mutableStateOf<String?>(null)
 
     /** Adds games found on a web page. Unlike a CSV, they join a list of the same name rather than replacing it. */
-    fun importWeb(name: String, games: List<WebGame>) {
+    fun importWeb(source: String, name: String, games: List<WebGame>) {
         val added = games.map { CsvGame(WebImport.gameId(it.url), it.title, it.url, it.genres) }
-        val same = csvLists.firstOrNull { it.platform.equals(name, ignoreCase = true) }
-        val list = CsvList(same?.platform ?: name, same?.file ?: "web", (same?.games.orEmpty() + added).distinctBy { it.id })
+        val same = csvLists.firstOrNull {
+            WishImport.sourceOf(it).equals(source, ignoreCase = true) && it.platform.equals(name, ignoreCase = true)
+        }
+        val list = CsvList(
+            same?.platform ?: name, same?.file ?: "web",
+            (same?.games.orEmpty() + added).distinctBy { it.id }, source = same?.let(WishImport::sourceOf) ?: source,
+        )
         csvLists = WishImport.merge(csvLists, listOf(list))
         games.forEach { g -> if (g.image.isNotBlank()) wishImages[WebImport.gameId(g.url)] = g.image }
         rebuildRef()
         saveImports()
-        showToast("ADDED ${"%,d".format(added.size)} GAME${if (added.size == 1) "" else "S"}\n${list.platform}")
+        showToast("ADDED ${"%,d".format(added.size)} GAME${if (added.size == 1) "" else "S"}\n${list.source} · ${list.platform}")
     }
 
-    fun removeCsvList(platform: String) {
-        csvLists = csvLists.filter { it.platform != platform }
+    fun removeCsvList(list: CsvList) {
+        csvLists = csvLists.filter { it !== list }
         val kept = csvLists.flatMap { l -> l.games.map { it.id } }.toSet()
         wishImages.keys.filter { it !in kept }.forEach { wishImages.remove(it) }
         rebuildRef()
