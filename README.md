@@ -73,6 +73,7 @@ The app keeps a note of why it crashed, and the next time it opens it says so, w
 The **Emulators** tab keeps track of the emulators you use and tells you when there's a newer version on GitHub.
 
 - **Add** an emulator with **+ Add emulator**, or tap one under **On this phone** (emulators the app recognises on your phone are listed there).
+- **What it plays**: each emulator shows the systems it plays, on its tile and under **On this phone**. Open one to see the detail (for multi-system emulators such as RetroArch, EKA2L1, 86Box, Flycast or WinUAE, the exact models, boards and cores). For an emulator the app doesn't know, type the systems yourself; you can also replace the built-in description with your own.
 - **Your version**: for an emulator on this phone the app reads the installed version itself. For one elsewhere (on your PC, say) you choose the device and type the version in.
 - **GitHub link**: paste the project's address (`https://github.com/owner/project`). The app checks its releases once a day when you open the tab, or when you tap **Check for updates**. GitHub allows 60 checks an hour without signing in.
 - **Up to date?** Versions are compared by their numbers (`1.19.1_GIT` matches `v1.19.1`). When the versions can't be compared (nightly builds named by date or commit, say), it says "Can't tell" instead of guessing. Tick **Include pre-releases and nightlies** for emulators that mostly publish those.

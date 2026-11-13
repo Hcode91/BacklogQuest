@@ -40,6 +40,8 @@ data class EmuEntry(
     val checkedAt: String = "",
     /** Why the last check failed, if it did. */
     val checkError: String = "",
+    /** The systems it plays, when you've typed your own (otherwise the built-in list is used). */
+    val systems: String = "",
 )
 
 /** A game in your own list. status is one of: backlog, playing, wishlist, beaten, dropped. */

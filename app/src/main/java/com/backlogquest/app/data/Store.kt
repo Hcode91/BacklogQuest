@@ -69,7 +69,7 @@ object Store {
                         .put("version", e.version).put("where", e.where).put("prerelease", e.prerelease)
                         .put("assetHint", e.assetHint).put("latest", e.latest).put("latestName", e.latestName)
                         .put("latestUrl", e.latestUrl).put("latestAt", e.latestAt).put("checkedAt", e.checkedAt)
-                        .put("checkError", e.checkError),
+                        .put("checkError", e.checkError).put("systems", e.systems),
                 )
             }
         })
@@ -123,6 +123,7 @@ object Store {
                             prerelease = e.optBoolean("prerelease"), assetHint = e.str("assetHint"),
                             latest = e.str("latest"), latestName = e.str("latestName"), latestUrl = e.str("latestUrl"),
                             latestAt = e.str("latestAt"), checkedAt = e.str("checkedAt"), checkError = e.str("checkError"),
+                            systems = e.str("systems"),
                         )
                     }
                 } ?: emptyList(),

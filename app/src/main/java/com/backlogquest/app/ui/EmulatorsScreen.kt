@@ -42,6 +42,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.backlogquest.app.data.BacklogViewModel
 import com.backlogquest.app.data.EmuEntry
+import com.backlogquest.app.data.EmuSystems
 import com.backlogquest.app.data.EmuUpdates
 import com.backlogquest.app.data.Emulators
 import com.backlogquest.app.data.GitHubReleases
@@ -67,9 +68,20 @@ private fun statusOf(vm: BacklogViewModel, e: EmuEntry): EmuStatus {
     }
 }
 
-/** The emulators from the built-in list that are on this phone: (name, package). */
-private fun foundOnPhone(ctx: Context): List<Pair<String, String>> =
-    Emulators.all.mapNotNull { e -> Emulators.installed(ctx, e)?.let { e.label to it.packageName } }
+/** An emulator app found on this phone, and what it plays when that's known. */
+private class Found(val name: String, val pkg: String, val info: EmuSystems.Info?)
+
+/** Emulators on this phone: ones the app can launch games in, plus any app it recognises by name or package. */
+private fun foundOnPhone(ctx: Context): List<Found> {
+    val launchable = Emulators.all.mapNotNull { e ->
+        Emulators.installed(ctx, e)?.let { Found(e.label, it.packageName, EmuSystems.find(e.label, it.packageName)) }
+    }
+    val pkgs = launchable.map { it.pkg }.toSet()
+    val recognised = Launcher.launchableApps(ctx)
+        .filter { it.first !in pkgs }
+        .mapNotNull { (pkg, label) -> EmuSystems.find(label, pkg)?.let { Found(label, pkg, it) } }
+    return (launchable + recognised).sortedBy { it.name.lowercase() }
+}
 
 /** Keep track of your emulators and update them from their GitHub releases. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -83,7 +95,7 @@ fun EmulatorsScreen(vm: BacklogViewModel) {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { resumed++ }
     val found = remember(resumed, s.emulators) {
         val added = s.emulators.map { it.pkg }.toSet()
-        foundOnPhone(ctx).filter { it.second !in added }
+        foundOnPhone(ctx).filter { it.pkg !in added }
     }
     // Once a day, look for new releases when the tab opens.
     LaunchedEffect(Unit) {
@@ -113,10 +125,17 @@ fun EmulatorsScreen(vm: BacklogViewModel) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     SectionTitle("ON THIS PHONE")
-                    Hint("Emulators found on this phone. Tap one to add it.")
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        found.forEach { (name, pkg) ->
-                            TabChip("+ $name", false) { editing = EmuEntry(newId(), name, pkg = pkg) }
+                    Hint("Emulators found on this phone, and what they play. Tap one to add it.")
+                    found.forEach { f ->
+                        Tile(Modifier.fillMaxWidth(), onClick = { editing = EmuEntry(newId(), f.name, pkg = f.pkg) }) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    f.name, Modifier.weight(1f), color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                )
+                                Text("+ ADD", color = BQ.B, fontFamily = BQ.Mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                            f.info?.let { Hint(it.summary + if (it.unsure) " (not confirmed)" else "") }
                         }
                     }
                 }
@@ -155,6 +174,8 @@ private fun EmuTile(vm: BacklogViewModel, e: EmuEntry, st: EmuStatus, onOpen: ()
                 else -> StatusLabel(st.label)
             }
         }
+        val plays = EmuSystems.summaryFor(e)
+        if (plays.isNotBlank()) Text(plays, color = BQ.Ink, fontSize = 13.sp)
         Hint(if (onPhone) "On this phone" else e.where.ifBlank { "Not on this phone" })
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(Modifier.weight(1f)) {
@@ -224,10 +245,14 @@ private fun EmuSheet(vm: BacklogViewModel, start: EmuEntry, onDismiss: () -> Uni
     val release = vm.emuReleases[draft.id]
     // Apps on this phone to link to: known emulators first, then everything else you can open.
     val apps = remember {
-        val known = foundOnPhone(ctx)
+        val known = foundOnPhone(ctx).map { it.name to it.pkg }
         val knownPkgs = known.map { it.second }.toSet()
         known + Launcher.launchableApps(ctx).filter { it.first !in knownPkgs }.map { it.second to it.first }
     }
+    // What it plays: from the built-in list, unless you've typed your own.
+    val info = EmuSystems.find(draft.name, draft.pkg)
+    var systemsText by remember { mutableStateOf(start.systems) }
+    fun savedSystems() = systemsText.trim().let { if (it == info?.summary) "" else it }
     val have = if (draft.pkg.isNotBlank()) EmuUpdates.installedVersion(ctx, draft.pkg) else null
 
     fun check() {
@@ -273,6 +298,22 @@ private fun EmuSheet(vm: BacklogViewModel, start: EmuEntry, onDismiss: () -> Uni
             OutlinedTextField(
                 value = draft.name, onValueChange = { draft = draft.copy(name = it) },
                 label = { Text("Name") }, singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
+            )
+
+            // What it plays.
+            SectionTitle("PLAYS")
+            if (info != null) {
+                Panel {
+                    Text(info.summary, color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    info.details.forEach { line -> Text("• $line", color = BQ.Muted, fontSize = 12.sp) }
+                    if (info.unsure) Hint("Not confirmed: this app couldn't be checked, so this is a best guess.")
+                }
+            }
+            OutlinedTextField(
+                value = systemsText, onValueChange = { systemsText = it },
+                label = { Text(if (info == null) "Systems it plays" else "Your own description (optional)") },
+                placeholder = { Text(info?.summary ?: "e.g. PlayStation 2") },
+                colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
             )
 
             // Where it is: an app on this phone, or somewhere else.
@@ -348,7 +389,7 @@ private fun EmuSheet(vm: BacklogViewModel, start: EmuEntry, onDismiss: () -> Uni
                         }
                         if (isApk && draft.pkg.isNotBlank()) {
                             PixelButton("INSTALL", kind = if (a == best) BtnKind.A else BtnKind.PLAIN) {
-                                if (isNew) vm.saveEmulator(draft.copy(name = draft.name.ifBlank { "Emulator" }))
+                                if (isNew) vm.saveEmulator(draft.copy(name = draft.name.ifBlank { "Emulator" }, systems = savedSystems()))
                                 vm.installEmuUpdate(draft, a)
                                 onDismiss()
                             }
@@ -372,7 +413,7 @@ private fun EmuSheet(vm: BacklogViewModel, start: EmuEntry, onDismiss: () -> Uni
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PixelButton("SAVE", kind = BtnKind.A, enabled = draft.name.isNotBlank()) {
                     val repo = GitHubReleases.repoFrom(link) ?: if (link.isBlank()) "" else draft.repo
-                    vm.saveEmulator(draft.copy(name = draft.name.trim(), repo = repo))
+                    vm.saveEmulator(draft.copy(name = draft.name.trim(), repo = repo, systems = savedSystems()))
                     onDismiss()
                 }
                 if (!isNew) {
