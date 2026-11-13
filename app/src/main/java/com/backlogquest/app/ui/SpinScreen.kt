@@ -401,6 +401,9 @@ private fun SomethingNew(
     val disabled by shelf.disabled.collectAsStateWithLifecycle()
     val spinner = rememberSpinner()
     var pool by rememberSaveable { mutableStateOf("all") }
+    // Filters for your imported CSV lists.
+    var genre by rememberSaveable { mutableStateOf("") }
+    var platform by rememberSaveable { mutableStateOf("") }
     var wishPick by rememberSaveable { mutableStateOf<String?>(null) }
     var shelfPick by remember { mutableStateOf<DiscoverGame?>(null) }
     var slotText by remember { mutableStateOf<String?>(null) }
@@ -409,6 +412,19 @@ private fun SomethingNew(
     val catalogues = shelf.graph.registry.providers.map { it.id }.filter { it !in disabled && (saved[it] ?: 0) > 0 }
     val catalogueGames = catalogues.sumOf { saved[it] ?: 0 }
     val wishes = remember(vm.ref, vm.state.hiddenWish, f.wishTag) { wishPool(vm, f.wishTag) }
+    val imported = remember(vm.ref, vm.state.hiddenWish) { wishPool(vm, "imported") }
+    val platforms = remember(imported) { imported.flatMap { it.platforms }.distinct().sorted() }
+    val onPlatform = remember(imported, platform) {
+        if (platform.isBlank()) imported else imported.filter { platform in it.platforms }
+    }
+    // Genres on the chosen platform, most common first.
+    val genres = remember(onPlatform) {
+        onPlatform.flatMap { it.genres }.groupingBy { it }.eachCount().entries
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+    }
+    val importedPool = remember(onPlatform, genre) {
+        if (genre.isBlank()) onPlatform else onPlatform.filter { genre in it.genres }
+    }
     val wish = wishPick?.let { id -> vm.ref.wishlist.firstOrNull { it.id == id } }
 
     Hint("One spin for a game you don't own yet: from your wishlist, or from the homebrew and free-game catalogues in Discover.")
@@ -417,21 +433,42 @@ private fun SomethingNew(
             "all" to "Everything",
             "wishlist" to "Wishlist ${"%,d".format(wishes.size)}",
             "discover" to "Homebrew & free ${"%,d".format(catalogueGames)}",
-        ),
+        ) + if (imported.isEmpty()) emptyList() else listOf("imported" to "My lists ${"%,d".format(imported.size)}"),
         pool,
     ) { pool = it }
-    if (pool != "discover") ChipRow(WISH_TAGS, f.wishTag) { f.wishTag = it }
-    if (pool != "wishlist" && catalogueGames == 0) {
+    if (pool == "imported") {
+        // Your CSV lists can be narrowed to one platform and one genre.
+        if (platforms.size > 1) {
+            ChipRow(listOf("" to "Any platform") + platforms.map { it to it }, platform) {
+                platform = it
+                genre = ""
+            }
+        }
+        ChipRow(listOf("" to "Any genre") + genres.map { it.key to "${it.key} ${it.value}" }, genre) { genre = it }
+        Hint("${"%,d".format(importedPool.size)} game${if (importedPool.size == 1) "" else "s"} match.")
+    } else if (pool != "discover") {
+        ChipRow(WISH_TAGS, f.wishTag) { f.wishTag = it }
+    }
+    if ((pool == "all" || pool == "discover") && catalogueGames == 0) {
         Hint("No Discover catalogues are saved on your phone yet. Open one in Discover and its games join this spin.")
     }
 
-    val canWish = pool != "discover" && wishes.isNotEmpty()
-    val canShelf = pool != "wishlist" && catalogues.isNotEmpty()
-    PixelButton("SPIN", Modifier.fillMaxWidth(), kind = BtnKind.A, enabled = (canWish || canShelf) && !spinner.busy) {
+    val canWish = (pool == "all" || pool == "wishlist") && wishes.isNotEmpty()
+    val canShelf = (pool == "all" || pool == "discover") && catalogues.isNotEmpty()
+    val canImported = pool == "imported" && importedPool.isNotEmpty()
+    PixelButton(
+        "SPIN", Modifier.fillMaxWidth(), kind = BtnKind.A,
+        enabled = (canWish || canShelf || canImported) && !spinner.busy,
+    ) {
         // With both on the table it's a coin toss, so the huge wishlist doesn't drown out the catalogues.
         val fromShelf = if (canWish && canShelf) Random.nextBoolean() else canShelf
         spinner.go {
-            if (fromShelf) {
+            if (canImported) {
+                val pick = importedPool.random()
+                flick(flickNames(importedPool, pick) { it.title }) { slotText = it }
+                wishPick = pick.id
+                shelfPick = null
+            } else if (fromShelf) {
                 val rows = shelf.graph.db.shelf().randomCached(catalogues, 15).map(shelf.graph.repository::decode)
                 val pick = rows.lastOrNull() ?: return@go
                 flick(rows.map { it.title }) { slotText = it }
@@ -449,7 +486,7 @@ private fun SomethingNew(
         slotText ?: wish?.title ?: shelfPick?.title ?: "Spin for something new",
         dim = spinner.busy || (slotText == null && wish == null && shelfPick == null),
     )
-    if (wish != null) WishPick(wish, onOpenWish)
+    if (wish != null) WishPick(vm, wish, onOpenWish)
     shelfPick?.let { g -> ShelfPick(g, shelf, onOpenDiscover, onAddToBacklog) }
 }
 
@@ -581,7 +618,7 @@ private fun WhereFrom(
         )
     }
     if (game != null) BacklogPick(vm, game)
-    if (wish != null) WishPick(wish, onOpenWish)
+    if (wish != null) WishPick(vm, wish, onOpenWish)
     shelfPick?.let { g -> ShelfPick(g, shelf, onOpenDiscover, onAddToBacklog) }
 }
 
@@ -631,12 +668,13 @@ private fun BacklogPick(vm: BacklogViewModel, game: Game) {
 }
 
 @Composable
-private fun WishPick(wish: WishItem, onOpenWish: (String) -> Unit) {
+private fun WishPick(vm: BacklogViewModel, wish: WishItem, onOpenWish: (String) -> Unit) {
     Panel {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Cover(wish.title, wish.platforms.firstOrNull().orEmpty(), "", Modifier.width(96.dp))
+            Cover(wish.title, wish.platforms.firstOrNull().orEmpty(), vm.wishImage(wish.id), Modifier.width(96.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                StatusLabel("FROM YOUR WISHLIST", BQ.OwnBg, BQ.B)
+                StatusLabel(if (wish.imported) "FROM YOUR LISTS" else "FROM YOUR WISHLIST", BQ.OwnBg, BQ.B)
+                if (wish.genres.isNotEmpty()) Hint(wish.genres.joinToString(", "))
                 if (wish.hours > 0) {
                     Text(
                         "${fmtHours(wish.hours)} main story",

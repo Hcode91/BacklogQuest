@@ -19,7 +19,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -156,6 +159,13 @@ fun GamesScreen(
     }
     val full: androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> GridItemSpan =
         { GridItemSpan(maxLineSpan) }
+    var importOpen by remember { mutableStateOf(false) }
+    if (importOpen) CsvImportSheet(vm) { importOpen = false }
+    // Imported games in the current view that have a link but no picture yet.
+    val needPictures = remember(rows, vm.wishImages.size) {
+        rows.mapNotNull { (it as? LibItem.Wish)?.w }
+            .filter { it.imported && it.url.isNotBlank() && it.id !in vm.wishImages }.map { it.id }
+    }
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(104.dp),
@@ -200,6 +210,18 @@ fun GamesScreen(
                                 Hint(vm.priceMessage, Modifier.weight(1f))
                             }
                         }
+                        // Your own lists: add CSV files, then fetch a picture for each game from its link.
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PixelButton("IMPORT CSV") { importOpen = true }
+                            if (vm.imageBusy) {
+                                PixelButton("STOP", kind = BtnKind.A) { vm.stopImages() }
+                            } else if (needPictures.isNotEmpty()) {
+                                PixelButton("FETCH ${"%,d".format(needPictures.size)} PICTURES", kind = BtnKind.B) {
+                                    vm.fetchWishImages(needPictures)
+                                }
+                            }
+                        }
+                        if (vm.imageMessage.isNotBlank()) Hint(vm.imageMessage)
                     }
                 }
             }
@@ -286,17 +308,18 @@ fun GamesScreen(
                     val w = item.w
                     if (f.grid) {
                         GridCard(
-                            w.title, w.platforms.firstOrNull().orEmpty(), "",
-                            badge = s.prices[normTitle(w.title)]?.let { Prices.format(it) } ?: fmtHours(w.hours),
+                            w.title, w.platforms.firstOrNull().orEmpty(), vm.wishImage(w.id),
+                            badge = s.prices[normTitle(w.title)]?.let { Prices.format(it) }
+                                ?: if (w.imported && w.hours <= 0) "" else fmtHours(w.hours),
                             meta = w.platforms.take(2).joinToString(", "),
                         ) { onOpenWish(w.id) }
                     } else {
                         ListRow(
-                            w.title, w.platforms.firstOrNull().orEmpty(), "", platformList(w.platforms),
+                            w.title, w.platforms.firstOrNull().orEmpty(), vm.wishImage(w.id), platformList(w.platforms),
                             trailing = s.prices[normTitle(w.title)]?.let { p ->
                                 Prices.format(p) + if (p.cut > 0) " −${p.cut}%" else ""
-                            } ?: fmtHours(w.hours),
-                            desc = "", tags = w.tags,
+                            } ?: if (w.imported && w.hours <= 0) "" else fmtHours(w.hours),
+                            desc = w.genres.joinToString(", "), tags = w.tags,
                         ) { onOpenWish(w.id) }
                     }
                 }

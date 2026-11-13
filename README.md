@@ -21,6 +21,16 @@ The app downloads `backlog-data.json` from this repo (the root of the `main` bra
 
 The status panel's achievements figure is everything you've earned: your whole Steam and RetroAchievements accounts and your PlayStation trophy total (with the details from **Setup → Achievements**), plus Xbox achievements you've ticked on games in the app. The PlayStation figure is read from your public PSNProfiles page using just your PSN ID, so it shows what that site last recorded; update your profile there after earning trophies. The accounts are re-read once a day when the app opens, or with **Recount** in Profile. Steam only answers one game at a time, so the first count can take a minute; after that only games you've played since are re-checked.
 
+## Importing CSV lists into the wishlist
+
+In **Games → Wishlist**, **Import CSV** adds games from CSV files such as MobyGames platform lists. You can pick several files at once.
+
+- From each row the app takes the title, the link (a `URL` or `Link` column) and the genres (a `Genres` column, separated by commas).
+- The platform comes from the file's name, so `All_Game_Boy_Games_April_2025.csv` is filed under "Game Boy". You can change it before adding. A `Platform` column, if the file has one, is used instead.
+- **Fetch pictures** then visits each game's link and saves the page's main picture as its cover. It goes one game at a time with a short pause, and you can stop it and carry on later.
+- Imported games show under the **Imported lists** filter, and in **Spin → Something new → My lists**, where you can narrow the spin to one platform and one genre.
+- Importing a file for a platform you've already imported replaces that list. Lists can be removed from the Import CSV sheet.
+
 ## Discover
 
 The **Discover** tab is the RetroShelf catalogue browser, merged into this app. Pick a console, pick a source, and browse homebrew and free games with search, genre filters, saved games, recently viewed and downloads.

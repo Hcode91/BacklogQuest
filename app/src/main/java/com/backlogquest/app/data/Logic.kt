@@ -21,6 +21,7 @@ val BUCKETS = listOf(
 val WISH_TAGS = listOf(
     "all" to "All", "must" to "Must play", "sub" to "Game Pass / PS Plus", "own" to "Owned",
     "drive" to "On my drives", "unreleased" to "Unreleased", "unmarked" to "Unmarked",
+    "imported" to "Imported lists",
 )
 
 /** How each wishlist tag is shown: label and colour style (must, sub, own or plain). */
@@ -62,6 +63,7 @@ fun wishTagOk(w: WishItem, tag: String): Boolean = when (tag) {
     "own" -> listOf("steam", "epic", "gog", "downloaded").any { it in w.tags }
     "unreleased" -> "unreleased" in w.tags
     "unmarked" -> w.unmarked
+    "imported" -> w.imported
     "drive" -> w.onDrive.isNotEmpty()
     else -> true
 }
