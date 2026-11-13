@@ -42,7 +42,7 @@ class WishImportTest {
         assertEquals("Quoted \"Name\", The", last.title)
         assertEquals("", last.url)
         assertTrue(last.genres.isEmpty())
-        assertEquals(listOf(listOf("a", "b\nc", "d")), WishImport.rows("﻿a,\"b\nc\",d\r\n\r\n"))
+        assertEquals(listOf(listOf("a", "b\nc", "d")), WishImport.rows("\uFEFFa,\"b\nc\",d\r\n\r\n"))
     }
 
     @Test fun `a file without a title column is refused with a reason`() {

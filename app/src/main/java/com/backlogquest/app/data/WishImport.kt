@@ -35,7 +35,7 @@ object WishImport {
         val cell = StringBuilder()
         var quoted = false
         var i = 0
-        val s = text.removePrefix("﻿")
+        val s = text.removePrefix("\uFEFF")
         fun endRow() {
             row.add(cell.toString())
             cell.setLength(0)
