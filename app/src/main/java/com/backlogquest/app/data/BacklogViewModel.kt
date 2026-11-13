@@ -192,6 +192,24 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
         showToast("IMPORTED ${"%,d".format(games)} GAME${if (games == 1) "" else "S"}\n${lists.joinToString(", ") { it.platform }}")
     }
 
+    /**
+     * The address waiting in the Import from web sheet: null when the sheet is
+     * closed, "" when it was opened by hand, or a page shared from a browser.
+     */
+    var webImport by mutableStateOf<String?>(null)
+
+    /** Adds games found on a web page. Unlike a CSV, they join a list of the same name rather than replacing it. */
+    fun importWeb(name: String, games: List<WebGame>) {
+        val added = games.map { CsvGame(WebImport.gameId(it.url), it.title, it.url, it.genres) }
+        val same = csvLists.firstOrNull { it.platform.equals(name, ignoreCase = true) }
+        val list = CsvList(same?.platform ?: name, same?.file ?: "web", (same?.games.orEmpty() + added).distinctBy { it.id })
+        csvLists = WishImport.merge(csvLists, listOf(list))
+        games.forEach { g -> if (g.image.isNotBlank()) wishImages[WebImport.gameId(g.url)] = g.image }
+        rebuildRef()
+        saveImports()
+        showToast("ADDED ${"%,d".format(added.size)} GAME${if (added.size == 1) "" else "S"}\n${list.platform}")
+    }
+
     fun removeCsvList(platform: String) {
         csvLists = csvLists.filter { it.platform != platform }
         val kept = csvLists.flatMap { l -> l.games.map { it.id } }.toSet()
