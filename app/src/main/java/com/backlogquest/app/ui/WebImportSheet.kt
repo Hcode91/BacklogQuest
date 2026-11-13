@@ -63,6 +63,8 @@ fun WebImportSheet(vm: BacklogViewModel, startAddress: String, onDismiss: () -> 
     var mode by remember { mutableStateOf("list") }
     var name by remember { mutableStateOf("") }
     var skipped by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // Games without a picture on the list usually have one on their own page.
+    var fetchAfter by remember { mutableStateOf(true) }
 
     fun read() {
         if (busy || address.isBlank()) return
@@ -104,7 +106,8 @@ fun WebImportSheet(vm: BacklogViewModel, startAddress: String, onDismiss: () -> 
             SectionTitle("IMPORT FROM WEB")
             Hint(
                 "Paste the address of a game's page or a list of games. Internet Archive collections and searches " +
-                    "are read in full; on other sites the app looks for the games on the page. " +
+                    "are read in full; on other sites the app looks for the games linked from the page, " +
+                    "with or without pictures. " +
                     "You can also share a page here from your browser.",
             )
             OutlinedTextField(
@@ -162,11 +165,34 @@ fun WebImportSheet(vm: BacklogViewModel, startAddress: String, onDismiss: () -> 
                     singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
                 )
                 Hint("Games are filed under this name in your wishlist, like the platform of a CSV list.")
+                val noPicture = chosen.filter { it.image.isBlank() }
+                if (noPicture.isNotEmpty()) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { fetchAfter = !fetchAfter }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(if (fetchAfter) "☑" else "☐", color = if (fetchAfter) BQ.B else BQ.Muted, fontSize = 20.sp)
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Fetch pictures from each game's page",
+                                color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                            )
+                            Hint(
+                                "${"%,d".format(noPicture.size)} game${if (noPicture.size == 1) " has" else "s have"} no picture on this list. " +
+                                    "The app visits each one after adding, about a second apiece; you can stop it from the wishlist.",
+                            )
+                        }
+                    }
+                }
                 PixelButton(
                     "ADD ${"%,d".format(chosen.size)} TO WISHLIST", kind = BtnKind.A,
                     enabled = chosen.isNotEmpty() && name.isNotBlank(),
                 ) {
                     vm.importWeb(name.trim(), chosen)
+                    if (fetchAfter && noPicture.isNotEmpty()) {
+                        vm.fetchWishImages(noPicture.map { WebImport.gameId(it.url) })
+                    }
                     onDismiss()
                 }
             }
