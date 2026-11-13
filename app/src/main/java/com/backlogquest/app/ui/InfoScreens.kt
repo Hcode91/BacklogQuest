@@ -90,13 +90,16 @@ private fun AchievementsPanel(vm: BacklogViewModel) {
             }
             Hint(
                 vm.achMessage.ifBlank {
-                    if (s.achTotalsAt.isBlank()) "Reads your Steam and RetroAchievements accounts."
+                    if (s.achTotalsAt.isBlank()) "Reads your Steam, RetroAchievements and PlayStation accounts."
                     else "Accounts last read ${fmtDate(s.achTotalsAt)}."
                 },
                 Modifier.weight(1f),
             )
         }
-        Hint("Steam and RetroAchievements use the details in Setup → Achievements. PlayStation and Xbox can't be read as a whole account.")
+        Hint(
+            "Uses the details in Setup → Achievements. PlayStation comes from your public PSNProfiles page, " +
+                "so update your profile there first if it looks behind. Xbox can't be read as a whole account.",
+        )
     }
 }
 

@@ -38,6 +38,24 @@ class AchievementTotalsTest {
         assertTrue(AchievementTotals.steamGame(500, "") is AchievementTotals.SteamGame.Retry)
     }
 
+    @Test fun `PlayStation total comes from the profile bar, or the four grades added up`() {
+        assertEquals(2578, AchievementTotals.psnTotal("""{"total":2578,"platinum":66,"gold":576,"silver":583,"bronze":1353}"""))
+        assertEquals(2578, AchievementTotals.psnTotal("""{"total":-1,"platinum":66,"gold":576,"silver":583,"bronze":1353}"""))
+        assertEquals(0, AchievementTotals.psnTotal("""{"total":0,"platinum":0,"gold":0,"silver":0,"bronze":0}"""))
+        assertEquals(null, AchievementTotals.psnTotal("""{"total":-1,"platinum":3,"gold":-1,"silver":-1,"bronze":-1}"""))
+        assertEquals(null, AchievementTotals.psnTotal("not json"))
+    }
+
+    @Test fun `PlayStation account total replaces ticked trophies once it has been read`() {
+        val game = Game(
+            id = "p", title = "T", device = "d", status = "backlog", achSource = Achievements.PSN,
+            achievements = List(20) { Trophy("t$it", earned = it < 5) },
+        )
+        val read = AchievementTotals.summary(AppState(games = listOf(game), achTotals = mapOf(Achievements.PSN to 2578)))
+        assertEquals(2578, read.total)
+        assertTrue(read.parts.single().wholeAccount)
+    }
+
     @Test fun `summary uses account totals where known and ticked games otherwise`() {
         fun game(source: String, earned: Int, total: Int) = Game(
             id = source + earned, title = "T", device = "d", status = "backlog", achSource = source,

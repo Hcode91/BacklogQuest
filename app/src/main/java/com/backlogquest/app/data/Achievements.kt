@@ -246,7 +246,7 @@ object Achievements {
     // ---------------- PSNProfiles / TrueAchievements ----------------
 
     /** Waits for a real page (not a "checking your browser" one) before reading. */
-    private const val READY =
+    internal const val READY =
         "if (document.readyState !== 'complete' || /just a moment|attention required|checking your browser/i.test(document.title)) return '';"
 
     private suspend fun psnProfiles(ctx: Context, title: String, platform: String): Found {

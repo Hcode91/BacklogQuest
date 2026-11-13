@@ -22,8 +22,10 @@ class AchSummary(val parts: List<AchPart>) {
  * Every achievement you've earned, not just in the games listed in this app.
  *
  * - Steam and RetroAchievements are read from your whole account (needs the keys in Setup).
- * - PlayStation and Xbox have no way to read an account, so those count the
- *   trophies you've ticked on games in this app.
+ * - PlayStation is read from your public PSNProfiles page (needs your PSN ID in Setup),
+ *   so it's as up to date as your profile is on that site.
+ * - Xbox has no way to read an account, so it counts the achievements you've
+ *   ticked on games in this app.
  */
 object AchievementTotals {
     class TotalsError(message: String) : Exception(message)
@@ -35,7 +37,7 @@ object AchievementTotals {
         val parts = listOf(
             AchPart("Steam", "Steam", s.achTotals[Achievements.STEAM] ?: ticked(Achievements.STEAM), Achievements.STEAM in s.achTotals),
             AchPart("RetroAchievements", "RA", s.achTotals[Achievements.RA] ?: ticked(Achievements.RA), Achievements.RA in s.achTotals),
-            AchPart("PlayStation", "PSN", ticked(Achievements.PSN), false),
+            AchPart("PlayStation", "PSN", s.achTotals[Achievements.PSN] ?: ticked(Achievements.PSN), Achievements.PSN in s.achTotals),
             AchPart("Xbox", "Xbox", ticked(Achievements.XBOX), false),
         )
         return AchSummary(parts.filter { it.count > 0 || it.wholeAccount })
@@ -43,6 +45,52 @@ object AchievementTotals {
 
     fun canReadSteam(s: AppState) = s.steamKey.isNotBlank() && s.steamProfile.isNotBlank()
     fun canReadRetro(s: AppState) = s.raKey.isNotBlank() && s.raUser.isNotBlank()
+    fun canReadPsn(s: AppState) = s.psnId.isNotBlank()
+
+    // ---------------- PlayStation (PSNProfiles) ----------------
+
+    /**
+     * Reads the trophy counts in the bar at the top of a PSNProfiles profile.
+     * Returns "" until the page has really loaded, so [PageReader] keeps waiting.
+     */
+    private val PSN_SCRIPT = """
+        (function(){ ${Achievements.READY}
+          var bar = document.querySelector('ul.profile-bar') || document;
+          function num(sel){
+            var e = bar.querySelector(sel); if (!e) return -1;
+            var n = parseInt((e.innerText || '').replace(/[^0-9]/g, ''), 10);
+            return isNaN(n) ? -1 : n;
+          }
+          var out = {total: num('li.total'), platinum: num('li.platinum'), gold: num('li.gold'),
+                     silver: num('li.silver'), bronze: num('li.bronze')};
+          if (out.total < 0 && out.platinum < 0) return '';
+          return JSON.stringify(out);
+        })()
+    """.trimIndent()
+
+    /** The trophy total from what [PSN_SCRIPT] read, or null if the page had no counts. */
+    fun psnTotal(read: String): Int? {
+        val o = try {
+            JSONObject(read)
+        } catch (e: Exception) {
+            return null
+        }
+        val total = o.optInt("total", -1)
+        if (total >= 0) return total
+        val grades = listOf("platinum", "gold", "silver", "bronze").map { o.optInt(it, -1) }
+        return if (grades.all { it >= 0 }) grades.sum() else null
+    }
+
+    suspend fun psn(ctx: android.content.Context, s: AppState): Int {
+        val id = s.psnId.trim()
+        if (!id.matches(Regex("[A-Za-z0-9_-]{3,16}"))) {
+            throw TotalsError("That PSN ID doesn't look right. Check it in Setup → Achievements.")
+        }
+        val read = PageReader.read(ctx, "https://psnprofiles.com/$id", PSN_SCRIPT, timeoutMs = 30_000)
+        return read?.let(::psnTotal) ?: throw TotalsError(
+            "Couldn't read PlayStation trophies. Check your PSN ID, and that psnprofiles.com/$id shows your profile.",
+        )
+    }
 
     // ---------------- RetroAchievements ----------------
 
