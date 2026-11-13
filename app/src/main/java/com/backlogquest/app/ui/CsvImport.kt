@@ -43,6 +43,9 @@ fun CsvImportSheet(vm: BacklogViewModel, onDismiss: () -> Unit) {
     var pending by remember { mutableStateOf<List<CsvList>>(emptyList()) }
     var problems by remember { mutableStateOf<List<String>>(emptyList()) }
     var reading by remember { mutableStateOf(false) }
+    // Where the lists are from, such as MobyGames: a tile in Discover and a place on the Spin wheel.
+    var source by remember { mutableStateOf("") }
+    var skipKnown by remember { mutableStateOf(true) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
@@ -65,6 +68,10 @@ fun CsvImportSheet(vm: BacklogViewModel, onDismiss: () -> Unit) {
                 }
             }
             pending = WishImport.merge(pending, read)
+            if (source.isBlank()) {
+                source = pending.firstNotNullOfOrNull { l -> l.games.firstOrNull { it.url.isNotBlank() }?.url }
+                    ?.let(WishImport::suggestSource).orEmpty()
+            }
             problems = failed
             reading = false
         }
@@ -92,6 +99,13 @@ fun CsvImportSheet(vm: BacklogViewModel, onDismiss: () -> Unit) {
 
             if (pending.isNotEmpty()) {
                 SectionTitle("READY TO ADD")
+                OutlinedTextField(
+                    value = source,
+                    onValueChange = { source = it },
+                    label = { Text("Source") },
+                    singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
+                )
+                Hint("Where these lists are from, such as MobyGames. Each source gets a tile in Discover and its own place on the Spin wheel.")
                 pending.forEachIndexed { i, list ->
                     Panel {
                         Hint("${list.file} · ${"%,d".format(list.games.size)} game${if (list.games.size == 1) "" else "s"}")
@@ -108,9 +122,31 @@ fun CsvImportSheet(vm: BacklogViewModel, onDismiss: () -> Unit) {
                         }
                     }
                 }
+                // Games you already have: in your wishlist on the same platform, or in your games.
+                // Lists being imported again don't count, as they're replaced.
+                val index = remember(vm.ref, vm.state.hiddenWish, vm.state.games) { vm.duplicateIndex() }
+                val known = remember(pending, source, index) {
+                    val replacing = pending.map { source.trim().lowercase() to it.platform.trim().lowercase() }.toSet()
+                    pending.map { l -> l.games.filter { index.known(it.title, l.platform.trim(), replacing) }.map { it.id }.toSet() }
+                }
+                val knownCount = known.sumOf { it.size }
+                if (knownCount > 0) {
+                    CheckRow(
+                        "Skip ${"%,d".format(knownCount)} already in your wishlist or games",
+                        "Same title on the same platform, or a game in your games list or history.",
+                        skipKnown,
+                    ) { skipKnown = !skipKnown }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PixelButton("ADD TO WISHLIST", kind = BtnKind.A) {
-                        vm.importCsv(pending.map { it.copy(platform = it.platform.trim()) })
+                    PixelButton("ADD TO WISHLIST", kind = BtnKind.A, enabled = source.isNotBlank()) {
+                        val lists = pending.mapIndexed { i, l ->
+                            l.copy(
+                                platform = l.platform.trim(), source = source.trim(),
+                                games = if (skipKnown) l.games.filter { it.id !in known[i] } else l.games,
+                            )
+                        }.filter { it.games.isNotEmpty() }
+                        if (lists.isEmpty()) vm.showToast("NOTHING NEW TO ADD\nYou already have every game in these lists")
+                        else vm.importCsv(lists)
                         pending = emptyList()
                         onDismiss()
                     }
@@ -120,16 +156,16 @@ fun CsvImportSheet(vm: BacklogViewModel, onDismiss: () -> Unit) {
 
             if (vm.csvLists.isNotEmpty()) {
                 SectionTitle("ALREADY IMPORTED")
-                vm.csvLists.forEach { list ->
+                vm.csvLists.sortedWith(compareBy({ WishImport.sourceOf(it).lowercase() }, { it.platform.lowercase() })).forEach { list ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Column(Modifier.weight(1f)) {
-                            Text(list.platform.ifBlank { "No platform" }, color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Hint("${"%,d".format(list.games.size)} game${if (list.games.size == 1) "" else "s"}")
+                            Text(WishImport.sourceOf(list), color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Hint("${list.platform.ifBlank { "No platform" }} · ${"%,d".format(list.games.size)} game${if (list.games.size == 1) "" else "s"}")
                         }
-                        PixelButton("REMOVE") { vm.removeCsvList(list.platform) }
+                        PixelButton("REMOVE") { vm.removeCsvList(list) }
                     }
                 }
-                Hint("Importing a file for a platform that's already here replaces that list.")
+                Hint("Importing a file for the same source and platform replaces that list.")
             }
             PixelButton("CLOSE", onClick = onDismiss)
         }

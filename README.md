@@ -40,6 +40,20 @@ In **Games → Wishlist**, **Import CSV** adds games from CSV files such as Moby
 - Games that have no picture on the list can have one fetched from their own page straight after adding (ticked by default), the same way Fetch pictures works for CSV imports.
 - You choose the platform or list name the games are filed under. Adding to a name that already exists adds to that list.
 
+## Your own sources
+
+Every imported list (CSV or web) has a **source**, such as "MobyGames". The import sheets suggest one from the games' links, and you can change it.
+
+- **Discover → My sources** shows a tile for each source. Its page has the games as tiles, with search, platform and genre filters, and a Fetch pictures button. Import buttons are there too.
+- **Spin → Where from** gives each source its own slice on the wheel, next to your devices, your wishlist and the Discover catalogues. **Something new → My sources** can be narrowed to one source, platform and genre.
+- Imported games still appear in your wishlist under the **Imported lists** filter. The Wishlist slice and pool on the Spin tab are just your own wishlist.
+
+## Duplicates
+
+- **When importing**, both import sheets count games you already have (same title on the same platform in your wishlist, or any game in your games list or history) and skip them unless you untick that option.
+- **Find duplicates** (in the wishlist and in Discover → My sources) lists imported games that are in your wishlist more than once, and imported games you already have. For repeats it keeps one copy (your data file's if there is one, else one with a picture) and ticks the rest for deleting. Games you already have start unticked, in case you want another platform's version. Your data file's own entries are never deleted.
+- Titles are compared ignoring case and punctuation ("Pac-Man" matches "PacMan"). The same title on different platforms counts as different games.
+
 ## Discover
 
 The **Discover** tab is the RetroShelf catalogue browser, merged into this app. Pick a console, pick a source, and browse homebrew and free games with search, genre filters, saved games, recently viewed and downloads.

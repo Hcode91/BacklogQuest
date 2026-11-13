@@ -162,8 +162,6 @@ fun GamesScreen(
     }
     val full: androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> GridItemSpan =
         { GridItemSpan(maxLineSpan) }
-    var importOpen by remember { mutableStateOf(false) }
-    if (importOpen) CsvImportSheet(vm) { importOpen = false }
     // Imported games in the current view that have a link but no picture yet.
     val needPictures = remember(rows, vm.wishImages.size) {
         rows.mapNotNull { (it as? LibItem.Wish)?.w }
@@ -218,8 +216,9 @@ fun GamesScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            PixelButton("IMPORT CSV") { importOpen = true }
+                            PixelButton("IMPORT CSV") { vm.csvImportOpen = true }
                             PixelButton("IMPORT FROM WEB") { vm.webImport = "" }
+                            if (vm.csvLists.isNotEmpty()) PixelButton("FIND DUPLICATES") { vm.duplicatesOpen = true }
                             if (vm.imageBusy) {
                                 PixelButton("STOP", kind = BtnKind.A) { vm.stopImages() }
                             } else if (needPictures.isNotEmpty()) {

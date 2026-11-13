@@ -41,6 +41,7 @@ import com.backlogquest.app.data.BacklogViewModel
 import com.backlogquest.app.data.WebFound
 import com.backlogquest.app.data.WebGame
 import com.backlogquest.app.data.WebImport
+import com.backlogquest.app.data.WishImport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -65,6 +66,8 @@ fun WebImportSheet(vm: BacklogViewModel, startAddress: String, onDismiss: () -> 
     var skipped by remember { mutableStateOf<Set<String>>(emptySet()) }
     // Games without a picture on the list usually have one on their own page.
     var fetchAfter by remember { mutableStateOf(true) }
+    var source by remember { mutableStateOf("") }
+    var skipKnown by remember { mutableStateOf(true) }
 
     fun read() {
         if (busy || address.isBlank()) return
@@ -78,6 +81,7 @@ fun WebImportSheet(vm: BacklogViewModel, startAddress: String, onDismiss: () -> 
                 found = result
                 mode = if (result.games.isNotEmpty()) "list" else "page"
                 name = if (result.games.isNotEmpty()) result.name else ""
+                source = WishImport.suggestSource(result.games.firstOrNull()?.url ?: result.page?.url.orEmpty())
                 skipped = emptySet()
             } catch (e: CancellationException) {
                 throw e
@@ -159,37 +163,49 @@ fun WebImportSheet(vm: BacklogViewModel, startAddress: String, onDismiss: () -> 
                 }
 
                 OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Platform or list name") },
+                    value = source,
+                    onValueChange = { source = it },
+                    label = { Text("Source") },
                     singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
                 )
-                Hint("Games are filed under this name in your wishlist, like the platform of a CSV list.")
-                val noPicture = chosen.filter { it.image.isBlank() }
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Platform or list") },
+                    singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
+                )
+                Hint(
+                    "The source gets a tile in Discover and its own place on the Spin wheel. " +
+                        "In your wishlist the games are filed under the platform or list.",
+                )
+                // Games you already have: in your wishlist on the same platform, or in your games.
+                val index = remember(vm.ref, vm.state.hiddenWish, vm.state.games) { vm.duplicateIndex() }
+                val known = remember(chosen, name, index) {
+                    chosen.filter { index.known(it.title, name.trim()) }.map { it.url }.toSet()
+                }
+                if (known.isNotEmpty()) {
+                    CheckRow(
+                        "Skip ${"%,d".format(known.size)} already in your wishlist or games",
+                        "Same title on the same platform, or a game in your games list or history.",
+                        skipKnown,
+                    ) { skipKnown = !skipKnown }
+                }
+                val toAdd = if (skipKnown) chosen.filter { it.url !in known } else chosen
+                // Games without a picture on the list usually have one on their own page.
+                val noPicture = toAdd.filter { it.image.isBlank() }
                 if (noPicture.isNotEmpty()) {
-                    Row(
-                        Modifier.fillMaxWidth().clickable { fetchAfter = !fetchAfter }.padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text(if (fetchAfter) "☑" else "☐", color = if (fetchAfter) BQ.B else BQ.Muted, fontSize = 20.sp)
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Fetch pictures from each game's page",
-                                color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp,
-                            )
-                            Hint(
-                                "${"%,d".format(noPicture.size)} game${if (noPicture.size == 1) " has" else "s have"} no picture on this list. " +
-                                    "The app visits each one after adding, about a second apiece; you can stop it from the wishlist.",
-                            )
-                        }
-                    }
+                    CheckRow(
+                        "Fetch pictures from each game's page",
+                        "${"%,d".format(noPicture.size)} game${if (noPicture.size == 1) " has" else "s have"} no picture on this list. " +
+                            "The app visits each one after adding, about a second apiece; you can stop it from the wishlist.",
+                        fetchAfter,
+                    ) { fetchAfter = !fetchAfter }
                 }
                 PixelButton(
-                    "ADD ${"%,d".format(chosen.size)} TO WISHLIST", kind = BtnKind.A,
-                    enabled = chosen.isNotEmpty() && name.isNotBlank(),
+                    "ADD ${"%,d".format(toAdd.size)} TO WISHLIST", kind = BtnKind.A,
+                    enabled = toAdd.isNotEmpty() && name.isNotBlank() && source.isNotBlank(),
                 ) {
-                    vm.importWeb(name.trim(), chosen)
+                    vm.importWeb(source.trim(), name.trim(), toAdd)
                     if (fetchAfter && noPicture.isNotEmpty()) {
                         vm.fetchWishImages(noPicture.map { WebImport.gameId(it.url) })
                     }

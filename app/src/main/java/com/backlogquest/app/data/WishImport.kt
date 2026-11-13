@@ -9,8 +9,11 @@ import java.io.File
 /** One game from an imported CSV list. */
 data class CsvGame(val id: String, val title: String, val url: String, val genres: List<String>)
 
-/** One imported CSV file: every game in it belongs to [platform]. */
-data class CsvList(val platform: String, val file: String, val games: List<CsvGame>)
+/**
+ * One imported list: every game in it belongs to [platform], and the list is
+ * shown under [source] (such as "MobyGames") in Discover and on the Spin wheel.
+ */
+data class CsvList(val platform: String, val file: String, val games: List<CsvGame>, val source: String = "")
 
 /**
  * Wishlist games imported from CSV files, such as MobyGames platform lists.
@@ -100,6 +103,39 @@ object WishImport {
         return byPlatform.map { (p, games) -> CsvList(p, file, games.distinctBy { it.id }) }
     }
 
+    /** Friendly names for sites lists are often taken from. */
+    private val SITE_NAMES = mapOf(
+        "mobygames.com" to "MobyGames",
+        "archive.org" to "Internet Archive",
+        "itch.io" to "itch.io",
+        "gamebrew.org" to "GameBrew",
+        "gbdev.io" to "Homebrew Hub",
+        "rpgmaker.net" to "RPGMaker.net",
+        "igdb.com" to "IGDB",
+        "backloggd.com" to "Backloggd",
+        "steampowered.com" to "Steam",
+        "wikipedia.org" to "Wikipedia",
+    )
+
+    /** A source name to suggest for games from [url]: "MobyGames", or else the site's address. */
+    fun suggestSource(url: String): String {
+        val site = WebImport.siteOf(url)
+        return SITE_NAMES[site] ?: site
+    }
+
+    /**
+     * The source a list is shown under. Lists imported before sources had names
+     * get one from their links (or, with no links, their platform).
+     */
+    fun sourceOf(list: CsvList): String = list.source.trim().ifBlank {
+        list.games.firstOrNull { it.url.isNotBlank() }?.let { suggestSource(it.url) }.orEmpty().ifBlank { list.platform }
+    }
+
+    /** Imported games grouped by source, biggest first. Hidden games are left out. */
+    fun sources(items: List<WishItem>, hidden: Set<String>): List<Pair<String, List<WishItem>>> =
+        items.filter { it.imported && it.id !in hidden }.groupBy { it.source }.toList()
+            .sortedWith(compareByDescending<Pair<String, List<WishItem>>> { it.second.size }.thenBy { it.first.lowercase() })
+
     /**
      * Wishlist entries for everything imported. A game that's in several lists
      * (the same ID on two platforms) becomes one entry with both platforms.
@@ -112,7 +148,7 @@ object WishImport {
                 WishItem(
                     g.id, g.title, listOfNotNull(list.platform.takeIf { it.isNotBlank() }), 0.0, 0.0,
                     tags = emptyList(), unmarked = false, onDrive = "",
-                    url = g.url, genres = g.genres, imported = true,
+                    url = g.url, genres = g.genres, imported = true, source = sourceOf(list),
                 )
             } else {
                 seen.copy(
@@ -125,10 +161,12 @@ object WishImport {
         return out.values.toList()
     }
 
-    /** Adds [added] to what's already imported; a list for the same platform is replaced. */
+    private fun key(list: CsvList) = sourceOf(list).lowercase() + "\u0000" + list.platform.lowercase()
+
+    /** Adds [added] to what's already imported; a list for the same source and platform is replaced. */
     fun merge(existing: List<CsvList>, added: List<CsvList>): List<CsvList> {
-        val replaced = added.map { it.platform.lowercase() }.toSet()
-        return existing.filter { it.platform.lowercase() !in replaced } + added
+        val replaced = added.map(::key).toSet()
+        return existing.filter { key(it) !in replaced } + added
     }
 
     // ---------------- Saving on the phone ----------------
@@ -139,7 +177,7 @@ object WishImport {
         val root = JSONObject()
         root.put("lists", JSONArray().apply {
             lists.forEach { l ->
-                put(JSONObject().put("platform", l.platform).put("file", l.file).put("games", JSONArray().apply {
+                put(JSONObject().put("platform", l.platform).put("file", l.file).put("source", l.source).put("games", JSONArray().apply {
                     l.games.forEach { g ->
                         put(JSONArray().put(g.id).put(g.title).put(g.url).put(g.genres.joinToString("|")))
                     }
@@ -165,6 +203,7 @@ object WishImport {
                         (0 until games.length()).mapNotNull { games.optJSONArray(it) }.map { g ->
                             CsvGame(g.optString(0), g.optString(1), g.optString(2), g.optString(3).split("|").filter { it.isNotBlank() })
                         },
+                        source = l.optString("source"),
                     )
                 }
             } ?: emptyList()

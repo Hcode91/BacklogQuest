@@ -69,11 +69,38 @@ class WishImportTest {
     }
 
     @Test fun `importing a platform again replaces its list`() {
-        val first = WishImport.parse(sample, "System A", "a.csv")
-        val again = WishImport.parse("Title\nOnly One\n", "system a", "a2.csv")
+        val first = WishImport.parse(sample, "System A", "a.csv").map { it.copy(source = "MobyGames") }
+        val again = WishImport.parse("Title\nOnly One\n", "system a", "a2.csv").map { it.copy(source = "mobygames") }
         val merged = WishImport.merge(first, again)
         assertEquals(1, merged.size)
         assertEquals(listOf("Only One"), merged.single().games.map { it.title })
+    }
+
+    @Test fun `the same platform from two different sources is kept as two lists`() {
+        val moby = WishImport.parse(sample, "Game Boy", "a.csv").map { it.copy(source = "MobyGames") }
+        val other = WishImport.parse("Title\nOnly One\n", "Game Boy", "b.csv").map { it.copy(source = "My picks") }
+        assertEquals(2, WishImport.merge(moby, other).size)
+    }
+
+    @Test fun `sources are suggested from the links, and older lists without one get one`() {
+        assertEquals("MobyGames", WishImport.suggestSource("https://www.mobygames.com/game/115374/airsea-attack/"))
+        assertEquals("Internet Archive", WishImport.suggestSource("https://archive.org/details/abc"))
+        assertEquals("itch.io", WishImport.suggestSource("https://someone.itch.io/game"))
+        assertEquals("example.com", WishImport.suggestSource("https://shop.example.com/x"))
+        val old = WishImport.parse(sample, "System A", "a.csv").single()
+        assertEquals("MobyGames", WishImport.sourceOf(old))
+        assertEquals("Named", WishImport.sourceOf(old.copy(source = "Named")))
+        val noLinks = WishImport.parse("Title\nA\n", "Neo Geo", "n.csv").single()
+        assertEquals("Neo Geo", WishImport.sourceOf(noLinks))
+    }
+
+    @Test fun `imported games carry their source, and sources group them biggest first`() {
+        val moby = WishImport.parse(sample, "System A", "a.csv").map { it.copy(source = "MobyGames") }
+        val mine = WishImport.parse("Title\nSolo\n", "PC", "b.csv").map { it.copy(source = "My picks") }
+        val items = WishImport.wishItems(moby + mine)
+        assertTrue(items.filter { it.title != "Solo" }.all { it.source == "MobyGames" })
+        val grouped = WishImport.sources(items, hidden = setOf("csv:999"))
+        assertEquals(listOf("MobyGames" to 3, "My picks" to 1), grouped.map { it.first to it.second.size })
     }
 
     @Test fun `picture is the page's preview image, else its first cover or screenshot`() {
