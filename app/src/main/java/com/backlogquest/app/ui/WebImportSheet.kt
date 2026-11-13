@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -40,10 +41,14 @@ import coil.compose.AsyncImage
 import com.backlogquest.app.data.BacklogViewModel
 import com.backlogquest.app.data.WebFound
 import com.backlogquest.app.data.WebGame
+import com.backlogquest.app.data.Duplicates
 import com.backlogquest.app.data.WebImport
 import com.backlogquest.app.data.WishImport
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Add games to the wishlist from a web address: paste one, or share a page to
@@ -179,10 +184,21 @@ fun WebImportSheet(vm: BacklogViewModel, startAddress: String, onDismiss: () -> 
                         "In your wishlist the games are filed under the platform or list.",
                 )
                 // Games you already have: in your wishlist on the same platform, or in your games.
-                val index = remember(vm.ref, vm.state.hiddenWish, vm.state.games) { vm.duplicateIndex() }
-                val known = remember(chosen, name, index) {
-                    chosen.filter { index.known(it.title, name.trim()) }.map { it.url }.toSet()
+                // Worked out in the background once typing pauses: with big lists it takes a moment.
+                val checked by produceState<Set<String>?>(null, chosen, name, vm.ref, vm.state.hiddenWish, vm.state.games) {
+                    value = null
+                    delay(400)
+                    val ref = vm.ref
+                    val st = vm.state
+                    val games = chosen
+                    val platform = name.trim()
+                    value = withContext(Dispatchers.Default) {
+                        val index = Duplicates.Index(ref.wishlist, st.hiddenWish, Duplicates.libraryTitles(st, ref))
+                        games.filter { index.known(it.title, platform) }.map { it.url }.toSet()
+                    }
                 }
+                val known = checked.orEmpty()
+                if (checked == null) Hint("Checking for games you already have…")
                 if (known.isNotEmpty()) {
                     CheckRow(
                         "Skip ${"%,d".format(known.size)} already in your wishlist or games",
@@ -203,7 +219,7 @@ fun WebImportSheet(vm: BacklogViewModel, startAddress: String, onDismiss: () -> 
                 }
                 PixelButton(
                     "ADD ${"%,d".format(toAdd.size)} TO WISHLIST", kind = BtnKind.A,
-                    enabled = toAdd.isNotEmpty() && name.isNotBlank() && source.isNotBlank(),
+                    enabled = toAdd.isNotEmpty() && name.isNotBlank() && source.isNotBlank() && checked != null,
                 ) {
                     vm.importWeb(source.trim(), name.trim(), toAdd)
                     if (fetchAfter && noPicture.isNotEmpty()) {

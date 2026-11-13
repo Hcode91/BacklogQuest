@@ -17,6 +17,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -28,8 +29,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.backlogquest.app.data.BacklogViewModel
 import com.backlogquest.app.data.CsvList
+import com.backlogquest.app.data.Duplicates
 import com.backlogquest.app.data.WishImport
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -124,12 +127,23 @@ fun CsvImportSheet(vm: BacklogViewModel, onDismiss: () -> Unit) {
                 }
                 // Games you already have: in your wishlist on the same platform, or in your games.
                 // Lists being imported again don't count, as they're replaced.
-                val index = remember(vm.ref, vm.state.hiddenWish, vm.state.games) { vm.duplicateIndex() }
-                val known = remember(pending, source, index) {
-                    val replacing = pending.map { source.trim().lowercase() to it.platform.trim().lowercase() }.toSet()
-                    pending.map { l -> l.games.filter { index.known(it.title, l.platform.trim(), replacing) }.map { it.id }.toSet() }
+                // Worked out in the background once typing pauses: with big lists it takes a moment.
+                val known by produceState<List<Set<String>>?>(null, pending, source, vm.ref, vm.state.hiddenWish, vm.state.games) {
+                    value = null
+                    delay(400)
+                    val ref = vm.ref
+                    val st = vm.state
+                    val lists = pending
+                    val src = source.trim().lowercase()
+                    value = withContext(Dispatchers.Default) {
+                        val index = Duplicates.Index(ref.wishlist, st.hiddenWish, Duplicates.libraryTitles(st, ref))
+                        val replacing = lists.map { src to it.platform.trim().lowercase() }.toSet()
+                        lists.map { l -> l.games.filter { index.known(it.title, l.platform.trim(), replacing) }.map { it.id }.toSet() }
+                    }
                 }
-                val knownCount = known.sumOf { it.size }
+                val ready = known?.size == pending.size
+                val knownCount = if (ready) known.orEmpty().sumOf { it.size } else 0
+                if (!ready) Hint("Checking for games you already have…")
                 if (knownCount > 0) {
                     CheckRow(
                         "Skip ${"%,d".format(knownCount)} already in your wishlist or games",
@@ -138,11 +152,12 @@ fun CsvImportSheet(vm: BacklogViewModel, onDismiss: () -> Unit) {
                     ) { skipKnown = !skipKnown }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PixelButton("ADD TO WISHLIST", kind = BtnKind.A, enabled = source.isNotBlank()) {
+                    PixelButton("ADD TO WISHLIST", kind = BtnKind.A, enabled = source.isNotBlank() && ready) {
+                        val skip = known.orEmpty()
                         val lists = pending.mapIndexed { i, l ->
                             l.copy(
                                 platform = l.platform.trim(), source = source.trim(),
-                                games = if (skipKnown) l.games.filter { it.id !in known[i] } else l.games,
+                                games = if (skipKnown) l.games.filter { it.id !in skip.getOrElse(i) { emptySet() } } else l.games,
                             )
                         }.filter { it.games.isNotEmpty() }
                         if (lists.isEmpty()) vm.showToast("NOTHING NEW TO ADD\nYou already have every game in these lists")
