@@ -2,6 +2,7 @@ package com.backlogquest.app.data
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -23,7 +24,30 @@ class WebFound(
     val games: List<WebGame>,
     /** How many games the site says there are, when that's more than could be read. */
     val total: Int = games.size,
+    /** How the list's pages are numbered, when it's split over several. */
+    val paging: Paging? = null,
 )
+
+/**
+ * How a list split over several pages is numbered, worked out from its page links.
+ * Both page numbers (/page/3/, ?page=3) and item offsets (?start=40) are understood.
+ */
+data class Paging(
+    /** The address with the number that changes from page to page replaced by {n}. */
+    val template: String,
+    /** The number in the address for page 1, and how much it goes up per page. */
+    val first: Int,
+    val step: Int,
+    /** Which page the address you gave is. */
+    val current: Int,
+    /** The highest page linked from it. Sites often show only a few, so there may be more. */
+    val last: Int,
+    /** Page 1's own address, when it differs from the pattern (often the list's plain address). */
+    val pageOne: String = "",
+) {
+    fun url(page: Int): String =
+        if (page <= 1 && pageOne.isNotBlank()) pageOne else template.replace("{n}", (first + (page - 1) * step).toString())
+}
 
 /**
  * Reads games from a web address so they can be added to the wishlist.
@@ -288,6 +312,123 @@ object WebImport {
         return best.map { it.game }
     }
 
+    private val NEXT_TEXT = Regex("^(next( page)?|older|more|[›»>→]|next ?[›»>→]+|[›»>→] ?next)$", RegexOption.IGNORE_CASE)
+    private val LAST_TEXT = Regex("^(last( page)?|end|[»]{1,2}|[›>]{2}|last ?[»›>]+)$", RegexOption.IGNORE_CASE)
+    private val PAGE_TEXT = Regex("^(page ?)?(\\d{1,5})$", RegexOption.IGNORE_CASE)
+
+    /**
+     * Finds how a list's pages are numbered. Looks at links on the same site whose text is a
+     * page number ("2", "Page 3") or a control ("Next", "»", "Last"), and at the number in each
+     * one's address that changes along with the text. The pattern that most numbered links agree
+     * on wins. Returns null when the page isn't split into pages.
+     */
+    fun paging(html: String, url: String): Paging? {
+        val doc = Jsoup.parse(html, url)
+        val here = url.substringBefore('#')
+        val site = siteOf(url)
+        class Cand(val template: String, val num: Int, val pageNo: Int?, val control: Boolean, val href: String)
+        val cands = ArrayList<Cand>()
+        var pageOneLink = ""
+        for (link in doc.select("a[href]")) {
+            val href = link.absUrl("href").substringBefore('#')
+            if (!href.startsWith("http") || siteOf(href) != site) continue
+            val text = clean(link.text()).ifBlank { clean(link.attr("aria-label")).ifBlank { clean(link.attr("title"))  } }
+            val pageNo = PAGE_TEXT.matchEntire(text)?.groupValues?.get(2)?.toIntOrNull()
+            val control = "next" in link.attr("rel").lowercase() || NEXT_TEXT.matches(text) || LAST_TEXT.matches(text)
+            if (pageNo == null && !control) continue
+            if (pageNo == 1) pageOneLink = href
+            // Only the part after the site's name can hold the page number.
+            val start = href.indexOf('/', href.indexOf("://") + 3).let { if (it < 0) href.length else it }
+            for (m in Regex("\\d+").findAll(href)) {
+                if (m.range.first < start || m.value.length > 7) continue
+                cands += Cand(href.replaceRange(m.range, "{n}"), m.value.toInt(), pageNo, control, href)
+            }
+        }
+        class Fit(val template: String, val first: Int, val step: Int, val numbered: List<Cand>, val all: List<Cand>)
+        val fits = cands.groupBy { it.template }.mapNotNull { (template, group) ->
+            val numbered = group.filter { it.pageNo != null && it.pageNo > 1 }.distinctBy { it.pageNo }
+            if (numbered.isEmpty()) return@mapNotNull null
+            // Page numbers in the address, or offsets: page n starts at (n - 1) × step.
+            val fit = when {
+                numbered.all { it.num == it.pageNo } -> Fit(template, 1, 1, numbered, group)
+                else -> {
+                    val step = numbered.first().let { it.num / (it.pageNo!! - 1) }
+                    if (step > 1 && numbered.all { it.num == (it.pageNo!! - 1) * step }) Fit(template, 0, step, numbered, group) else null
+                }
+            } ?: return@mapNotNull null
+            // One numbered link is only enough alongside a "Next" or "Last" link of the same kind.
+            if (numbered.size < 2 && group.none { it.control }) null else fit
+        }
+        val best = fits.maxByOrNull { it.numbered.size } ?: return null
+        fun pageOf(num: Int) = (num - best.first) / best.step + 1
+        val pattern = Regex(Regex.escape(best.template).replace("{n}", "\\E(\\d+)\\Q"))
+        val current = pattern.matchEntire(here)?.groupValues?.get(1)?.toIntOrNull()?.let(::pageOf) ?: 1
+        val last = maxOf(current, (best.all.map { pageOf(it.num) }).maxOrNull() ?: current)
+        if (last <= 1) return null
+        val pageOne = when {
+            pageOneLink.isNotBlank() -> pageOneLink
+            current == 1 -> here
+            else -> ""
+        }
+        return Paging(best.template, best.first, best.step, current, last, pageOne)
+    }
+
+    /** The games on one page, looking again with the hidden browser if the page fills its list in with scripts. */
+    private suspend fun gamesOn(ctx: Context, url: String): Triple<List<WebGame>, Paging?, String> {
+        val body = html(ctx, url)
+        var games = withContext(Dispatchers.Default) { listGames(body, url) }
+        var paging = withContext(Dispatchers.Default) { paging(body, url) }
+        if (games.size < 10) {
+            val shown = PageReader.read(ctx, url, BUILT_SCRIPT, timeoutMs = 25_000)
+            if (shown != null) {
+                val more = withContext(Dispatchers.Default) { listGames(shown, url) }
+                if (more.size > games.size) games = more
+                if (paging == null) paging = withContext(Dispatchers.Default) { paging(shown, url) }
+            }
+        }
+        return Triple(games, paging, body)
+    }
+
+    /**
+     * Reads pages [from] to [to] of a list (or until the pages run out, when [to] is null),
+     * one after another with a short pause, and gathers the games from all of them.
+     * [onPage] hears after each page: its number, the highest page known so far, and the games so far.
+     * Stops early when a page brings no new games, which is what happens past the last page.
+     */
+    suspend fun readPages(
+        ctx: Context,
+        paging: Paging,
+        from: Int,
+        to: Int?,
+        onPage: (page: Int, last: Int, games: List<WebGame>) -> Unit,
+    ): List<WebGame> {
+        val seen = LinkedHashMap<String, WebGame>()
+        var last = paging.last
+        var page = maxOf(1, from)
+        val end = to ?: MAX_PAGES
+        while (page <= minOf(end, MAX_PAGES) && (to != null || page <= last)) {
+            val url = paging.url(page)
+            val (games, found, _) = try {
+                gamesOn(ctx, url)
+            } catch (e: WebError) {
+                if (page == from) throw e else break
+            }
+            // Later pages link further on, so the last page known keeps growing.
+            if (found != null && found.template == paging.template) last = maxOf(last, found.last)
+            var added = 0
+            for (g in games) if (seen.putIfAbsent(g.url, g) == null) added++
+            onPage(page, maxOf(last, page), seen.values.toList())
+            if (added == 0) break
+            page++
+            if (page <= minOf(end, MAX_PAGES)) delay(PAGE_PAUSE_MS)
+        }
+        return seen.values.toList()
+    }
+
+    /** The most pages read in one go, and the pause between them so the site isn't hammered. */
+    const val MAX_PAGES = 500
+    private const val PAGE_PAUSE_MS = 800L
+
     /** The whole page as the hidden browser sees it, for sites that only answer a real browser. */
     private val HTML_SCRIPT = "(function(){ ${Achievements.READY} return document.documentElement.outerHTML; })()"
 
@@ -333,21 +474,11 @@ object WebImport {
             }
         }
         progress("Reading the page…")
-        val body = html(ctx, url)
-        var page = withContext(Dispatchers.Default) { pageGame(body, url) }
-        var games = withContext(Dispatchers.Default) { listGames(body, url) }
-        // Many sites send a bare page and fill the list in with scripts. If little turned up,
-        // look again with the hidden browser, which runs them, and keep whichever found more.
-        if (games.size < 10) {
-            progress("Looking closer…")
-            val shown = PageReader.read(ctx, url, BUILT_SCRIPT, timeoutMs = 25_000)
-            if (shown != null) {
-                val more = withContext(Dispatchers.Default) { listGames(shown, url) }
-                if (more.size > games.size) games = more
-                if (page == null) page = withContext(Dispatchers.Default) { pageGame(shown, url) }
-            }
-        }
+        // Many sites send a bare page and fill the list in with scripts; gamesOn looks again
+        // with the hidden browser, which runs them, when little turned up.
+        val (games, paging, body) = gamesOn(ctx, url)
+        val page = withContext(Dispatchers.Default) { pageGame(body, url) }
         if (page == null && games.isEmpty()) throw WebError("No game or list could be found on that page.")
-        return WebFound(page?.title.orEmpty(), page, games)
+        return WebFound(page?.title.orEmpty(), page, games, paging = paging?.takeIf { games.isNotEmpty() })
     }
 }
