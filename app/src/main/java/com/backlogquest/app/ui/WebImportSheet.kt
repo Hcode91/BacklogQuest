@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -34,17 +35,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.backlogquest.app.data.BacklogViewModel
+import com.backlogquest.app.data.Paging
 import com.backlogquest.app.data.WebFound
 import com.backlogquest.app.data.WebGame
 import com.backlogquest.app.data.Duplicates
 import com.backlogquest.app.data.WebImport
 import com.backlogquest.app.data.WishImport
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -73,6 +77,53 @@ fun WebImportSheet(vm: BacklogViewModel, startAddress: String, onDismiss: () -> 
     var fetchAfter by remember { mutableStateOf(true) }
     var source by remember { mutableStateOf("") }
     var skipKnown by remember { mutableStateOf(true) }
+    // Reading every page of a list split over several.
+    var pageFrom by remember { mutableStateOf("1") }
+    var pageTo by remember { mutableStateOf("") }
+    var pagesJob by remember { mutableStateOf<Job?>(null) }
+    var pagesNote by remember { mutableStateOf("") }
+
+    fun readPages(result: WebFound, paging: Paging) {
+        if (pagesJob != null) return
+        val from = pageFrom.trim().toIntOrNull()?.coerceAtLeast(1) ?: 1
+        val to = pageTo.trim().toIntOrNull()?.takeIf { it >= from }
+        problem = ""
+        pagesNote = "Reading page $from…"
+        var gathered = emptyList<WebGame>()
+        var lastKnown = paging.last
+        fun keep() {
+            if (gathered.isNotEmpty()) {
+                // The games already shown stay, with the new pages' games after them.
+                val all = (result.games + gathered).distinctBy { it.url }
+                found = WebFound(result.name, result.page, all, paging = paging.copy(last = lastKnown))
+                skipped = emptySet()
+            }
+        }
+        pagesJob = scope.launch {
+            try {
+                WebImport.readPages(context, paging, from, to) { page, last, games ->
+                    gathered = games
+                    lastKnown = last
+                    scope.launch { pagesNote = "Read page $page of ${to ?: last}${if (to == null) "+" else ""} · ${"%,d".format(games.size)} games" }
+                }
+                keep()
+                pagesNote = "Done: ${"%,d".format(gathered.size)} games from pages $from–${lastKnown.coerceAtMost(to ?: lastKnown)}."
+            } catch (e: CancellationException) {
+                keep()
+                pagesNote = "Stopped: ${"%,d".format(gathered.size)} games so far."
+            } catch (e: WebImport.WebError) {
+                keep()
+                problem = e.message.orEmpty()
+                pagesNote = ""
+            } catch (e: Exception) {
+                keep()
+                problem = "A page couldn't be read. Check your connection and try again."
+                pagesNote = ""
+            } finally {
+                pagesJob = null
+            }
+        }
+    }
 
     fun read() {
         if (busy || address.isBlank()) return
@@ -84,6 +135,9 @@ fun WebImportSheet(vm: BacklogViewModel, startAddress: String, onDismiss: () -> 
             try {
                 val result = WebImport.read(context, address) { message -> scope.launch { progress = message } }
                 found = result
+                pageFrom = "1"
+                pageTo = result.paging?.last?.toString().orEmpty()
+                pagesNote = ""
                 mode = if (result.games.isNotEmpty()) "list" else "page"
                 name = if (result.games.isNotEmpty()) result.name else ""
                 source = WishImport.suggestSource(result.games.firstOrNull()?.url ?: result.page?.url.orEmpty())
@@ -146,6 +200,9 @@ fun WebImportSheet(vm: BacklogViewModel, startAddress: String, onDismiss: () -> 
                     if (result.total > result.games.size) {
                         Hint("The site lists ${"%,d".format(result.total)}; the first ${"%,d".format(result.games.size)} were read.")
                     }
+                    result.paging?.let { paging -> PagesPanel(paging, pageFrom, pageTo, pagesJob != null, pagesNote,
+                        onFrom = { pageFrom = it }, onTo = { pageTo = it },
+                        onRead = { readPages(result, paging) }, onStop = { pagesJob?.cancel() }) }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SectionTitle("${"%,d".format(chosen.size)} SELECTED", Modifier.weight(1f))
                         TabChip("All", false) { skipped = emptySet() }
@@ -229,6 +286,52 @@ fun WebImportSheet(vm: BacklogViewModel, startAddress: String, onDismiss: () -> 
                 }
             }
             PixelButton("CLOSE", onClick = onDismiss)
+        }
+    }
+}
+
+/** The list is split over pages: choose which to read, and follow along as they're read. */
+@Composable
+private fun PagesPanel(
+    paging: Paging,
+    from: String,
+    to: String,
+    running: Boolean,
+    note: String,
+    onFrom: (String) -> Unit,
+    onTo: (String) -> Unit,
+    onRead: () -> Unit,
+    onStop: () -> Unit,
+) {
+    Panel {
+        Text("This list has more pages", color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        Hint(
+            "This is page ${paging.current}; pages up to ${paging.last} are linked, and there may be more. " +
+                "Pages are read one after another with a short pause, and reading stops when a page has no new games.",
+        )
+        Hint("Address pattern: " + paging.template.replace("{n}", if (paging.step == 1) "(page)" else "(item ${paging.step}×page)"))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = from, onValueChange = { v -> onFrom(v.filter(Char::isDigit).take(4)) },
+                label = { Text("From page") }, singleLine = true, enabled = !running,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                colors = bqFieldColors(), modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value = to, onValueChange = { v -> onTo(v.filter(Char::isDigit).take(4)) },
+                label = { Text("To page") }, placeholder = { Text("to the end") }, singleLine = true, enabled = !running,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                colors = bqFieldColors(), modifier = Modifier.weight(1f),
+            )
+        }
+        Hint("Leave To page empty to keep going until the pages run out (at most ${WebImport.MAX_PAGES}).")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (running) PixelButton("STOP", onClick = onStop)
+            else PixelButton(
+                if (to.isBlank()) "READ ALL PAGES" else "READ PAGES ${from.ifBlank { "1" }}–$to",
+                kind = BtnKind.B, onClick = onRead,
+            )
+            if (note.isNotBlank()) Hint(note, Modifier.weight(1f))
         }
     }
 }
