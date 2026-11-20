@@ -45,6 +45,14 @@ In **Games → Wishlist**, **Import CSV** adds games from CSV files such as Moby
 
 **Setup → Platforms** lists every system you play, so none get left out. It starts with all the systems your emulators cover (Nintendo, Sony, Sega, Atari, NEC/SNK, arcade, other consoles, computers and game engines), plus Android, Legacy Android, iOS, Windows Phone, Switch 2 and Windows PC, and everything your own Pocket emulators play (PocketPlug's plug-and-play games, LCD games, chess computers and vintage computers; Zeebo, GP2X, LeapFrog Didj, Monon Color, VideoNow, RIM pagers and more). Built-in platforms added in later versions join your list automatically, unless you'd removed them. Each one shows the emulators that play it and how many of your games are on it. Remove any you don't use, add your own, or add back the built-in ones you removed. When you type a game's platform, matching platforms from this list are offered.
 
+### Every platform, on the Now tab
+
+Below Now playing, **Every platform** has an entry for each of your platforms. It shows the game you're playing on it (tap to open it) or "Nothing playing", so you can see at a glance which platforms are being left out. Filter to **Empty** or **Playing**, or search for one.
+
+Games are matched to platforms by the platform set on the game, or by its device when that's blank (a game on your Switch 2 counts for Nintendo Switch 2, one on PC for Windows PC). Short and store names are understood too: PS2, PSX, Genesis, GBA, N64, Switch and so on.
+
+**+ Add** opens a list of your backlog and wishlist games for that platform. Picking a backlog game sets it to Playing; picking a wishlist game adds it as Playing on the device you choose. **Everything** lists all your backlog and wishlist games instead, and files the one you pick under that platform.
+
 ## Your own sources
 
 Every imported list (CSV or web) has a **source**, such as "MobyGames". The import sheets suggest one from the games' links, and you can change it.
