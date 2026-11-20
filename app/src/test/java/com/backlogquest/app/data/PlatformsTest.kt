@@ -26,6 +26,20 @@ class PlatformsTest {
         }
     }
 
+    @Test fun newBuiltInsJoinAnOldList() {
+        val dir = Files.createTempDirectory("bq").toFile()
+        // Saved by the first version: no record of the built-in list, and Amstrad CPC removed.
+        val old = PLATFORMS_V1.filter { it != "Amstrad CPC" } + "Pico-8"
+        File(dir, "state.json").writeText(org.json.JSONObject().put("platforms", org.json.JSONArray(old)).toString())
+        val loaded = Store.loadState(dir)!!.platforms
+        assertTrue("PocketPlug machines added", "Mephisto Academy" in loaded && "Zeebo" in loaded)
+        assertTrue("removed stays removed", "Amstrad CPC" !in loaded)
+        assertTrue("own kept", "Pico-8" in loaded)
+        // Saved again, nothing new is added next time.
+        Store.saveState(dir, AppState(platforms = loaded.filter { it != "Zeebo" }))
+        assertTrue("Zeebo" !in Store.loadState(dir)!!.platforms)
+    }
+
     @Test fun familiesAndOwn() {
         assertEquals("Phones", Platforms.familyOf("ios"))
         assertEquals("Your own", Platforms.familyOf("Pico-8"))
