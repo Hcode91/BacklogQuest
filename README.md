@@ -47,7 +47,7 @@ On a game, **How to start it** chooses the emulator (with the game's file or ID)
 
 Emulators that are given the game, so the tile goes straight into it: RetroArch, Eden, yuzu, Kenji-NX, PPSSPP, Dolphin, DuckStation, NetherSX2, M64Plus FZ, Azahar, melonDS, Flycast, Cemu, EKA2L1, XenDroid, J2ME Loader and DroidArcadia (by file); Vita3K, ARMSX3, PocketTrophy and BachataS4 (by title ID); GameNative / PocketRig (by Steam app ID, or `GOG:id` / `EPIC:id`).
 
-Your Pocket emulators are sent a `com.hcode91.pocket.LAUNCH_GAME` request: PocketChroma, PocketPenguin, PocketSprout, PocketReel and PocketCarioca with the game file as its data, PocketPlug with the machine's set name as the `game_id` extra. A version that doesn't answer it yet opens on its own game list. PocketOuya, PocketCentury, PocketPager and PocketR5900 open on their own screen.
+Your Pocket emulators are sent a `com.hcode91.pocket.LAUNCH_GAME` request (their `feature/launch-from-other-apps` builds answer it): PocketChroma and PocketSprout get the game file as its data; PocketPlug (set name, or `set/cart title`), PocketPenguin (library name), PocketReel (disc title), PocketCarioca (library title) and PocketOuya (name or package, Ouya or Windows Phone games) get the `game_id` extra; PocketCentury just boots. An older build opens on its own game list. PocketR5900 opens on its own screen.
 
 Emulators that can't be told which game to start (RPCSX, and any other emulator the app recognises on your phone, such as 86BoxDroid, WinUAE, AppleWinDroid, Delta Touch, DroidDeck or GameHub) are listed under **Other emulators on this phone**: their tile opens the emulator, you pick the game there, and play time is still tracked.
 
