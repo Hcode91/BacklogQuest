@@ -183,7 +183,7 @@ object EmuSystems {
             "pocketplug", listOf("PocketPlug"), listOf("com.hcode91.pocketplug"),
             "Plug-and-play TV games, LCD games, chess computers and vintage computers",
             listOf(
-                "Plug-and-play: Retro Dance Mat, 168-in-1 and 36-in-1 Game Phone Cases, 240-in-1 Mini Arcade, A6Plus Mini Arcade, 265-in-1 and 500-in-1 handhelds, Joystick88, Atari Flashback, Air-Blaster Joystick",
+                "Plug-and-play: Retro Dance Mat, 168-in-1 and 36-in-1 Game Phone Cases, 240-in-1 Mini Arcade, A6Plus Mini Arcade, 265-in-1 and 500-in-1 handhelds, Mini Arcade Console 10-in-1, Joystick88, Atari Flashback, Air-Blaster Joystick",
                 "Advance Bright TV games: 4 Player System, Pinball, Super Ping Pong, Mini Joystick 80-in-1, Joystick 14-in-1, Wireless Tennis, Kick Boxing; Millennium Arcade 3D 15-in-1",
                 "Consoles: Radofin 1292 / 1392 APVS (VC 4000 family), Entex Adventure Vision, APF M-1000 / MP1000, ColecoVision carts (through the Adam)",
                 "Virtual pets and tabletops: Egg Pet (Generation 1, Angel, Ocean), Chibi Pachi: Alien Fever, Coleco Alien Attack, Tomy Alien Chase, Playskool Alphie, Coleco Amaze-A-Tron, Milton Bradley Arcade Mania",
