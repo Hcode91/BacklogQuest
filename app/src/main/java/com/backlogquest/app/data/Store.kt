@@ -101,7 +101,7 @@ object Store {
                 hiddenWish = o.optJSONArray("hiddenWish")?.let { a ->
                     (0 until a.length()).map { a.strAt(it) }.toSet()
                 } ?: emptySet(),
-                dataUrl = o.str("dataUrl").ifBlank { DEFAULT_DATA_URL },
+                dataUrl = o.str("dataUrl").let { if (it.isBlank() || it.equals(OLD_DATA_URL, ignoreCase = true)) DEFAULT_DATA_URL else it },
                 rawgKey = o.str("rawgKey"),
                 lastSync = o.str("lastSync"),
                 raUser = o.str("raUser"),

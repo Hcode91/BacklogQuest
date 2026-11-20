@@ -2,6 +2,10 @@ package com.backlogquest.app.data
 
 /** Where the app downloads your data file from (your GitHub repo). */
 const val DEFAULT_DATA_URL =
+    "https://raw.githubusercontent.com/Hcode91/BacklogQuest/main/backlog-data.json"
+
+/** The default address before the GitHub account was renamed; saved settings still holding it are moved over. */
+const val OLD_DATA_URL =
     "https://raw.githubusercontent.com/HOzdogus/BacklogQuest/main/backlog-data.json"
 
 data class Device(
