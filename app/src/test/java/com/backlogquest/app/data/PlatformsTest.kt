@@ -52,4 +52,10 @@ class PlatformsTest {
         Store.saveState(dir, AppState(platforms = listOf("PlayStation 2", "Pico-8")))
         assertEquals(listOf("PlayStation 2", "Pico-8"), Store.loadState(dir)!!.platforms)
     }
+
+    @Test fun everyPocketPlugPlatformHasASet() {
+        val pp = Platforms.defaults.filter { "PocketPlug" in it.playedWith }.map { it.name }
+        pp.forEach { assertTrue("$it has a PocketPlug set", it in Platforms.pocketPlugSets) }
+        Platforms.pocketPlugSets.keys.forEach { assertTrue("$it is a platform", it in pp) }
+    }
 }
