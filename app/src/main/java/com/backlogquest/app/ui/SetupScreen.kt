@@ -52,6 +52,7 @@ private val SETUP_TILES = listOf(
     Triple("stores", "IMPORT FROM STORES", "Bring in your libraries"),
     Triple("devices", "DEVICES", "What you play on, and the two-for-two rule"),
     Triple("platforms", "PLATFORMS", "Every system you play, so none get left out"),
+    Triple("releases", "RELEASES", "IGDB keys for the Upcoming and New tabs"),
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -68,6 +69,8 @@ fun SetupScreen(vm: BacklogViewModel) {
     var steamKeyText by remember { mutableStateOf(s.steamKey) }
     var steamProfileText by remember { mutableStateOf(s.steamProfile) }
     var psnText by remember { mutableStateOf(s.psnId) }
+    var igdbIdText by remember { mutableStateOf(s.igdbClientId) }
+    var igdbSecretText by remember { mutableStateOf(s.igdbSecret) }
     var newDevice by remember { mutableStateOf("") }
     var newPlatform by remember { mutableStateOf("") }
     var confirmReplace by remember { mutableStateOf(false) }
@@ -310,6 +313,33 @@ fun SetupScreen(vm: BacklogViewModel) {
                     label = { Text("IsThereAnyDeal API key") },
                     singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
                 )
+            }
+        }
+
+        if (open == "releases") item {
+            Panel {
+                SectionTitle("RELEASES")
+                Hint(
+                    "The Upcoming and New tabs get release dates from IGDB, the database most game-tracking apps " +
+                        "use. It's free, through a Twitch developer app: sign in at dev.twitch.tv/console (two-step " +
+                        "sign-in has to be on), choose Register Your Application, give it any name, set the OAuth " +
+                        "redirect URL to http://localhost and the category to Application Integration, then Create. " +
+                        "Open it, copy the Client ID, press New Secret and copy that too. Both stay on this phone.",
+                )
+                OutlinedTextField(
+                    value = igdbIdText,
+                    onValueChange = { t -> igdbIdText = t; vm.update { it.copy(igdbClientId = t.trim(), igdbToken = "", igdbTokenExpires = 0) } },
+                    label = { Text("Twitch client ID") },
+                    singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = igdbSecretText,
+                    onValueChange = { t -> igdbSecretText = t; vm.update { it.copy(igdbSecret = t.trim(), igdbToken = "", igdbTokenExpires = 0) } },
+                    label = { Text("Twitch client secret") },
+                    singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                )
+                Hint("Only your platforms are asked about. Change them in Setup → Platforms.")
             }
         }
 
