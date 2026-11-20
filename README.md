@@ -41,6 +41,10 @@ In **Games → Wishlist**, **Import CSV** adds games from CSV files such as Moby
 - Games that have no picture on the list can have one fetched from their own page straight after adding (ticked by default), the same way Fetch pictures works for CSV imports.
 - You choose the platform or list name the games are filed under. Adding to a name that already exists adds to that list.
 
+## Platforms
+
+**Setup → Platforms** lists every system you play, so none get left out. It starts with all the systems your emulators cover (Nintendo, Sony, Sega, Atari, NEC/SNK, arcade, other consoles, computers and game engines), plus Android, Legacy Android, iOS, Windows Phone, Switch 2 and Windows PC. Each one shows the emulators that play it and how many of your games are on it. Remove any you don't use, add your own, or add back the built-in ones you removed. When you type a game's platform, matching platforms from this list are offered.
+
 ## Your own sources
 
 Every imported list (CSV or web) has a **source**, such as "MobyGames". The import sheets suggest one from the games' links, and you can change it.

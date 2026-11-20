@@ -62,6 +62,7 @@ object Store {
         o.put("histCovers", JSONObject().apply { s.histCovers.forEach { (k, v) -> put(k, v) } })
         o.put("notFound", JSONArray().apply { s.notFound.forEach { put(it) } })
         o.put("psnId", s.psnId)
+        o.put("platforms", JSONArray().apply { s.platforms.forEach { put(it) } })
         o.put("emulators", JSONArray().apply {
             s.emulators.forEach { e ->
                 put(
@@ -115,6 +116,9 @@ object Store {
                 } ?: emptyMap(),
                 notFound = o.optJSONArray("notFound")?.let { a -> (0 until a.length()).map { a.strAt(it) }.toSet() } ?: emptySet(),
                 psnId = o.str("psnId"),
+                // Saved before the list existed: start from the built-in one.
+                platforms = o.optJSONArray("platforms")?.let { a -> (0 until a.length()).map { a.strAt(it) } }
+                    ?: Platforms.defaultNames,
                 emulators = o.optJSONArray("emulators")?.let { a ->
                     (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { e ->
                         EmuEntry(
