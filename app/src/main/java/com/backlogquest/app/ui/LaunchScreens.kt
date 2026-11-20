@@ -45,6 +45,15 @@ import com.backlogquest.app.data.Launcher
 import com.backlogquest.app.data.EmuSystems
 import com.backlogquest.app.data.fmtNum
 
+/** Emulators that look games up by the name you type, kept as typed (title IDs are upper case). */
+private val NAMED_GAMES = setOf("pocketplug", "pocketpenguin", "pocketreel", "pocketcarioca", "pocketouya", "rpgpocket")
+
+/** Your own apps that answer BacklogQuest's launch request in their latest builds. */
+private val YOUR_APPS = setOf(
+    "pocketplug", "pocketchroma", "pocketpenguin", "pocketsprout", "pocketreel", "pocketcarioca",
+    "pocketouya", "pocketcentury", "swfpocket", "rpgpocket",
+)
+
 /** "NetherSX2 · Kingdom Hearts.iso" */
 fun launchSummary(ctx: android.content.Context, l: Launch): String = when (l.mode) {
     "app" -> Launcher.appLabel(ctx, l.pkg)
@@ -191,14 +200,14 @@ fun LaunchSetupDialog(
                                 // PocketPlug's set names are lower case; title IDs are upper case.
                                 // Your Pocket emulators look games up by name, as typed; title IDs are upper case.
                                 value = gameId,
-                                onValueChange = { gameId = if (chosen.key.startsWith("pocket") && chosen.key != "pockettrophy") it else it.trim().uppercase() },
+                                onValueChange = { gameId = if (chosen.key in NAMED_GAMES) it else it.trim().uppercase() },
                                 label = {
                                     Text(
                                         when (chosen.key) {
                                             "pocketplug" -> "Machine set"
                                             "gamenative" -> "Game ID"
                                             "pocketreel" -> "Disc title"
-                                            "pocketpenguin", "pocketcarioca", "pocketouya" -> "Game name"
+                                            "pocketpenguin", "pocketcarioca", "pocketouya", "rpgpocket" -> "Game name"
                                             else -> "Title ID"
                                         },
                                     )
@@ -213,7 +222,7 @@ fun LaunchSetupDialog(
                         }
                         else -> Unit
                     }
-                    if (chosen != null && chosen.key.startsWith("pocket") && chosen.key != "pockettrophy") {
+                    if (chosen != null && chosen.key in YOUR_APPS) {
                         Hint("Needs a ${chosen.label} build with \"start from another app\". An older one opens on its game list instead.")
                     }
                 }

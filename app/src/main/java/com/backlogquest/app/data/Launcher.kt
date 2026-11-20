@@ -213,6 +213,12 @@ object Emulators {
             { i, _, _ -> pocket(i, null, "") },
         Emulator("pocketpager", "PocketPager", listOf("com.hcode91.pocketpager/*"), EmuInput.NONE, listOf("rim", "pager"))
             { i, _, _ -> pocket(i, null, "") },
+        Emulator("swfpocket", "SWF Pocket", listOf("dev.swfpocket/*"), EmuInput.FILE, listOf("flash", "swf"))
+            { i, _, uri -> pocket(i, uri, "") },
+        Emulator(
+            "rpgpocket", "RPG Pocket", listOf("com.rpgpocket.rebuilt/*", "com.rpgpocket/*"), EmuInput.ID, listOf("rpg maker"),
+            idHint = "The game's title in RPG Pocket's library",
+        ) { i, l, _ -> pocket(i, null, l.gameId) },
         Emulator("pocketr5900", "PocketR5900", listOf("com.ps2x.runner/*"), EmuInput.NONE, listOf("ps2")) { _, _, _ -> },
     )
 

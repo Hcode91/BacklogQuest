@@ -266,6 +266,8 @@ object Platforms {
         "Apple II" to listOf("apple ii", "apple 2", "apple ][", "appleii"),
         "Atari 8-bit computers (400 / 800 / XL / XE)" to listOf("atari 8-bit", "atari 800", "atari xl", "atari xe"),
         "Zeebo" to listOf("zeebo"),
+        "RPG Maker" to listOf("rpg maker 2000", "rpg maker 2003", "rpg maker xp", "rpg maker vx", "rpg maker vx ace", "rpg maker mv", "rpg maker mz", "rpgmaker"),
+        "Flash games" to listOf("flash", "swf", "adobe flash"),
     )
 
     /** Lowercase letters and digits only. */
