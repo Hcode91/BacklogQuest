@@ -214,8 +214,19 @@ object EmuSystems {
             "VideoNow discs (XP, Color / Jr / Color FX, black and white)",
             listOf("Includes the VideoNow XP interactive adventures and quiz discs."),
         ),
-        Info("swfpocket", listOf("SWF Pocket"), emptyList(), "Flash (.swf) games", unsure = true),
-        Info("rpgpocket", listOf("RPG Pocket"), emptyList(), "RPG Maker games", unsure = true),
+        Info(
+            "swfpocket", listOf("SWF Pocket", "SWFlash"), listOf("dev.swfpocket"), "Flash (.swf) games and animations",
+            listOf("Plays self-contained .swf files through Ruffle, offline.", "ActionScript 1/2/3 support varies by movie."),
+        ),
+        Info(
+            "rpgpocket", listOf("RPG Pocket", "RPG Pocket Rebuilt"), listOf("com.rpgpocket.rebuilt", "com.rpgpocket"),
+            "RPG Maker games (2000/2003, XP, VX, VX Ace, MV, MZ)",
+            listOf(
+                "RPG Maker 2000 / 2003: EasyRPG Player (WebAssembly)",
+                "RPG Maker MV / MZ: in a WebView",
+                "RPG Maker XP / VX / VX Ace: native mkxp-z, experimental (Android 11+)",
+            ),
+        ),
     )
 
     /** Lowercase letters and digits only, so "Bachata S4+" and "bachatas4" match. */
