@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import com.backlogquest.app.data.Platforms
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -50,6 +51,7 @@ private val SETUP_TILES = listOf(
     Triple("prices", "PRICES", "Wishlist prices from IsThereAnyDeal"),
     Triple("stores", "IMPORT FROM STORES", "Bring in your libraries"),
     Triple("devices", "DEVICES", "What you play on, and the two-for-two rule"),
+    Triple("platforms", "PLATFORMS", "Every system you play, so none get left out"),
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -67,6 +69,7 @@ fun SetupScreen(vm: BacklogViewModel) {
     var steamProfileText by remember { mutableStateOf(s.steamProfile) }
     var psnText by remember { mutableStateOf(s.psnId) }
     var newDevice by remember { mutableStateOf("") }
+    var newPlatform by remember { mutableStateOf("") }
     var confirmReplace by remember { mutableStateOf(false) }
     // Which part of Setup is open; null shows the tiles.
     var open by rememberSaveable { mutableStateOf<String?>(null) }
@@ -354,8 +357,68 @@ fun SetupScreen(vm: BacklogViewModel) {
                 }
             }
         }
+        if (open == "platforms") item {
+            PlatformsPanel(vm, newPlatform, { newPlatform = it })
+        }
     }
     importing?.let { st -> StoreImportDialog(vm, st) { importing = null } }
+}
+
+/** Your platforms, grouped as in the built-in list, with what plays each and how many games you have for it. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PlatformsPanel(vm: BacklogViewModel, newName: String, onNewName: (String) -> Unit) {
+    val s = vm.state
+    val counts = remember(s.games) {
+        s.games.map { it.platform.trim().lowercase() }.filter { it.isNotEmpty() }.groupingBy { it }.eachCount()
+    }
+    val missing = Platforms.defaultNames.filter { d -> s.platforms.none { it.equals(d, ignoreCase = true) } }
+    fun add(name: String) {
+        val n = name.trim()
+        if (n.isNotEmpty() && s.platforms.none { it.equals(n, ignoreCase = true) }) vm.update { it.copy(platforms = it.platforms + n) }
+    }
+    androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Panel {
+        SectionTitle("MY PLATFORMS · ${s.platforms.size}")
+        Hint(
+            "Every system you play: the ones your emulators cover, plus your own devices' platforms. " +
+                "They're offered when you set a game's platform. Remove any you don't use, or add your own.",
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = newName, onValueChange = { onNewName(it.take(40)) },
+                label = { Text("Add a platform") }, placeholder = { Text("e.g. Steam Deck, Pico-8") },
+                singleLine = true, colors = bqFieldColors(), modifier = Modifier.weight(1f),
+            )
+            PixelButton("ADD", kind = BtnKind.B, enabled = newName.isNotBlank()) { add(newName); onNewName("") }
+        }
+        if (missing.isNotEmpty()) {
+            PixelButton("ADD BACK ${missing.size} REMOVED") { vm.update { it.copy(platforms = it.platforms + missing) } }
+        }
+    }
+    val byFamily = s.platforms.groupBy { Platforms.familyOf(it) }
+    Platforms.families.forEach { family ->
+        val list = byFamily[family] ?: return@forEach
+        Panel {
+            SectionTitle("${family.uppercase()} · ${list.size}")
+            list.forEach { name ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
+                        Text(name, color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        val with = Platforms.info(name)?.playedWith.orEmpty()
+                        val games = counts[name.lowercase()] ?: 0
+                        val about = listOfNotNull(
+                            with.takeIf { it.isNotEmpty() }?.joinToString(", "),
+                            if (games > 0) "$games game${if (games == 1) "" else "s"}" else null,
+                        ).joinToString(" · ")
+                        if (about.isNotEmpty()) Text(about, color = BQ.Muted, fontSize = 12.sp)
+                    }
+                    PixelButton("✕") { vm.update { st -> st.copy(platforms = st.platforms.filter { it != name }) } }
+                }
+            }
+        }
+    }
+    }
 }
 
 @Composable

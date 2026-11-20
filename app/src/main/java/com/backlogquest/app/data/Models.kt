@@ -108,6 +108,8 @@ data class Price(
 data class AppState(
     /** Emulators you keep track of in the Emulators tab. */
     val emulators: List<EmuEntry> = emptyList(),
+    /** Everything you play on: the systems your emulators cover and your own devices' platforms. */
+    val platforms: List<String> = Platforms.defaultNames,
     val baseline: Int = 0,
     val devices: List<Device> = DEFAULT_DEVICES,
     val games: List<Game> = emptyList(),

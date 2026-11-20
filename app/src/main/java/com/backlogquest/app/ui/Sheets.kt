@@ -357,7 +357,13 @@ fun EditSheet(vm: BacklogViewModel, target: EditTarget, onDismiss: () -> Unit) {
                 placeholder = { Text("Leave blank if it's the same as the device") },
                 singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
             )
-            val platformChoices = (foundPlatforms + knownPlatforms(s)).distinctBy { it.lowercase() }.take(10)
+            // While typing, your platforms that match; otherwise the ones found for the game and the ones you use most.
+            val typed = platform.trim()
+            val platformChoices = if (typed.isNotEmpty() && s.platforms.none { it.equals(typed, ignoreCase = true) }) {
+                s.platforms.filter { it.contains(typed, ignoreCase = true) }.take(12)
+            } else {
+                (foundPlatforms + knownPlatforms(s)).distinctBy { it.lowercase() }.take(10)
+            }
             if (platformChoices.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     platformChoices.forEach { p ->
