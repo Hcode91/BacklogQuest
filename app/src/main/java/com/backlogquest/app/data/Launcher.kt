@@ -192,20 +192,23 @@ object Emulators {
         // Your own Pocket emulators. Each is asked to start the game with POCKET_LAUNCH; a version
         // that doesn't know that request yet simply opens on its own game list.
         Emulator("pocketplug", "PocketPlug", listOf("com.hcode91.pocketplug/*"), EmuInput.ID, listOf("plug"),
-            idHint = "Machine's set name, e.g. 168pcase") { i, l, _ -> pocket(i, null, l.gameId) },
+            idHint = "Set name, e.g. 168pcase (or 1292apvs/Cart title)") { i, l, _ -> pocket(i, null, l.gameId) },
         Emulator("pocketchroma", "PocketChroma", listOf("com.hcode91.pocketchroma/*"), EmuInput.FILE, listOf("monon"))
             { i, _, uri -> pocket(i, uri, "") },
-        Emulator("pocketpenguin", "PocketPenguin", listOf("com.hcode91.pocketpenguin/*"), EmuInput.FILE, listOf("gp2x", "wiz", "caanoo"))
-            { i, _, uri -> pocket(i, uri, "") },
+        Emulator("pocketpenguin", "PocketPenguin", listOf("com.hcode91.pocketpenguin/*"), EmuInput.ID, listOf("gp2x", "wiz", "caanoo"),
+            idHint = "The game's name in PocketPenguin's library") { i, l, _ -> pocket(i, null, l.gameId) },
         Emulator("pocketsprout", "PocketSprout", listOf("com.hcode91.pocketsprout/*"), EmuInput.FILE, listOf("didj", "leapfrog"))
             { i, _, uri -> pocket(i, uri, "") },
-        Emulator("pocketreel", "PocketReel", listOf("com.hcode91.pocketreel/*"), EmuInput.FILE, listOf("videonow"))
-            { i, _, uri -> pocket(i, uri, "") },
+        Emulator("pocketreel", "PocketReel", listOf("com.hcode91.pocketreel/*"), EmuInput.ID, listOf("videonow"),
+            idHint = "The disc's title in PocketReel's library") { i, l, _ -> pocket(i, null, l.gameId) },
         Emulator(
-            "pocketcarioca", "PocketCarioca", listOf("com.hcode91.pocketcarioca/*", "io.github.zeebxteam.zeebx/*"),
-            EmuInput.FILE, listOf("zeebo"),
-        ) { i, _, uri -> pocket(i, uri, "") },
-        Emulator("pocketouya", "PocketOuya", listOf("io.github.hozdogus.pocketouya/*"), EmuInput.NONE, listOf("ouya")) { i, _, _ -> pocket(i, null, "") },
+            "pocketcarioca", "PocketCarioca", listOf("com.hcode91.pocketcarioca/*"),
+            EmuInput.ID, listOf("zeebo"), idHint = "The game's title in PocketCarioca's library",
+        ) { i, l, _ -> pocket(i, null, l.gameId) },
+        Emulator(
+            "pocketouya", "PocketOuya", listOf("io.github.hozdogus.pocketouya/*"), EmuInput.ID, listOf("ouya", "windows phone"),
+            idHint = "The game's name or package in PocketOuya's library",
+        ) { i, l, _ -> pocket(i, null, l.gameId) },
         Emulator("pocketcentury", "PocketCentury", listOf("com.hcode91.pocketcentury/*"), EmuInput.NONE, listOf("100-in-1", "sy-909"))
             { i, _, _ -> pocket(i, null, "") },
         Emulator("pocketpager", "PocketPager", listOf("com.hcode91.pocketpager/*"), EmuInput.NONE, listOf("rim", "pager"))

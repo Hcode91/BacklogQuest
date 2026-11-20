@@ -172,8 +172,11 @@ object EmuSystems {
         Info("j2me", listOf("J2ME Loader"), listOf("ru.playsoftware.j2meloader"), "Java (J2ME) phone games"),
         Info(
             "pocketouya", listOf("PocketOuya", "PocketMicro"), listOf("io.github.hozdogus.pocketouya", "com.hcode91.pocketmicro"),
-            "Ouya games",
-            listOf("Converts a game's original Ouya .apk so it installs and runs on modern Android."),
+            "Ouya games and Windows Phone games",
+            listOf(
+                "Ouya: converts a game's original .apk so it installs and runs on modern Android.",
+                "Windows Phone: runs games through its built-in runtime.",
+            ),
         ),
         // Your own emulators.
         Info(

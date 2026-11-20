@@ -189,12 +189,16 @@ fun LaunchSetupDialog(
                         EmuInput.ID -> {
                             OutlinedTextField(
                                 // PocketPlug's set names are lower case; title IDs are upper case.
-                                value = gameId, onValueChange = { gameId = if (chosen.key == "pocketplug") it.trim() else it.trim().uppercase() },
+                                // Your Pocket emulators look games up by name, as typed; title IDs are upper case.
+                                value = gameId,
+                                onValueChange = { gameId = if (chosen.key.startsWith("pocket") && chosen.key != "pockettrophy") it else it.trim().uppercase() },
                                 label = {
                                     Text(
                                         when (chosen.key) {
                                             "pocketplug" -> "Machine set"
                                             "gamenative" -> "Game ID"
+                                            "pocketreel" -> "Disc title"
+                                            "pocketpenguin", "pocketcarioca", "pocketouya" -> "Game name"
                                             else -> "Title ID"
                                         },
                                     )
@@ -209,8 +213,8 @@ fun LaunchSetupDialog(
                         }
                         else -> Unit
                     }
-                    if (chosen != null && chosen.key.startsWith("pocket") && chosen.input != EmuInput.NONE) {
-                        Hint("If your copy of ${chosen.label} doesn't start the game straight away, it opens on its game list instead.")
+                    if (chosen != null && chosen.key.startsWith("pocket") && chosen.key != "pockettrophy") {
+                        Hint("Needs a ${chosen.label} build with \"start from another app\". An older one opens on its game list instead.")
                     }
                 }
             } else {

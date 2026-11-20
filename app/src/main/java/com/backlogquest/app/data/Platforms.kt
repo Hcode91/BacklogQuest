@@ -107,7 +107,7 @@ object Platforms {
             "Android" to listOf("Your phone"),
             "Legacy Android" to emptyList(),
             "iOS" to listOf("PocketPear"),
-            "Windows Phone" to emptyList(),
+            "Windows Phone" to listOf("PocketOuya"),
             "Nokia N-Gage" to listOf("EKA2L1"),
             "Symbian phones" to listOf("EKA2L1"),
             "Java phone games" to listOf("J2ME Loader", "EKA2L1"),
