@@ -42,6 +42,7 @@ import com.backlogquest.app.data.EmuInput
 import com.backlogquest.app.data.Emulators
 import com.backlogquest.app.data.Launch
 import com.backlogquest.app.data.Launcher
+import com.backlogquest.app.data.EmuSystems
 import com.backlogquest.app.data.fmtNum
 
 /** "NetherSX2 · Kingdom Hearts.iso" */
@@ -86,6 +87,11 @@ fun LaunchSetupDialog(
     var pkg by remember { mutableStateOf(if (current?.mode == "app") current?.pkg.orEmpty() else "") }
     var appSearch by remember { mutableStateOf("") }
     val apps = remember { Launcher.launchableApps(ctx) }
+    // Emulators on this phone that BacklogQuest can't hand a game to: they open on their own game list.
+    val otherEmulators = remember(emulators) {
+        val known = emulators.mapNotNull { Emulators.installed(ctx, it)?.packageName }.toSet()
+        apps.filter { (p, label) -> p !in known && EmuSystems.find(label, p) != null }
+    }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { picked ->
         if (picked != null) {
@@ -148,6 +154,15 @@ fun LaunchSetupDialog(
                         }
                         if (suggested != null && platform.isNotBlank()) Hint("Suggested for $platform: ${suggested.label}")
                     }
+                    if (otherEmulators.isNotEmpty()) {
+                        Text("Other emulators on this phone", color = BQ.Muted, fontSize = 12.sp)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            otherEmulators.forEach { (p, label) ->
+                                TabChip(label, false) { mode = "app"; pkg = p }
+                            }
+                        }
+                        Hint("These can't be told which game to start, so the tile opens the emulator and you pick the game there. Play time is still tracked.")
+                    }
                     when (chosen?.input) {
                         EmuInput.FILE -> {
                             Text("Game file", color = BQ.Muted, fontSize = 12.sp)
@@ -173,13 +188,29 @@ fun LaunchSetupDialog(
                         }
                         EmuInput.ID -> {
                             OutlinedTextField(
-                                value = gameId, onValueChange = { gameId = it.trim().uppercase() },
-                                label = { Text("Title ID") }, placeholder = { Text(chosen.idHint) },
+                                // PocketPlug's set names are lower case; title IDs are upper case.
+                                value = gameId, onValueChange = { gameId = if (chosen.key == "pocketplug") it.trim() else it.trim().uppercase() },
+                                label = {
+                                    Text(
+                                        when (chosen.key) {
+                                            "pocketplug" -> "Machine set"
+                                            "gamenative" -> "Game ID"
+                                            else -> "Title ID"
+                                        },
+                                    )
+                                },
+                                placeholder = { Text(chosen.idHint) },
                                 singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
                             )
-                            Hint("${chosen.label} starts games by their title ID. The game must already be installed in ${chosen.label}.")
+                            Hint("${chosen.label} starts games by their ID. The game must already be installed in ${chosen.label}.")
+                        }
+                        EmuInput.NONE -> {
+                            Hint("${chosen.label} can't be told which game to start, so the tile opens it and you pick the game there. Play time is still tracked.")
                         }
                         else -> Unit
+                    }
+                    if (chosen != null && chosen.key.startsWith("pocket") && chosen.input != EmuInput.NONE) {
+                        Hint("If your copy of ${chosen.label} doesn't start the game straight away, it opens on its game list instead.")
                     }
                 }
             } else {
@@ -188,7 +219,7 @@ fun LaunchSetupDialog(
                     placeholder = { Text("Search your apps") }, singleLine = true, colors = bqFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Hint("For Android games, or apps like GameHub, GameNative or Shadow PC (these open on their home screen).")
+                Hint("For Android games, or apps like GameHub, DroidDeck or Shadow PC (these open on their home screen).")
                 LazyColumn(Modifier.weight(1f)) {
                     items(apps.filter { appSearch.isBlank() || it.second.contains(appSearch.trim(), ignoreCase = true) }, key = { it.first }) { (p, label) ->
                         Text(

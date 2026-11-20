@@ -41,6 +41,16 @@ In **Games → Wishlist**, **Import CSV** adds games from CSV files such as Moby
 - Games that have no picture on the list can have one fetched from their own page straight after adding (ticked by default), the same way Fetch pictures works for CSV imports.
 - You choose the platform or list name the games are filed under. Adding to a name that already exists adds to that list.
 
+## Starting games and home-screen icons
+
+On a game, **How to start it** chooses the emulator (with the game's file or ID) or an Android app. **▶ Play** starts it and tracks play time; **Home icon** pins a tile with the game's cover to your home screen that does the same.
+
+Emulators that are given the game, so the tile goes straight into it: RetroArch, Eden, yuzu, Kenji-NX, PPSSPP, Dolphin, DuckStation, NetherSX2, M64Plus FZ, Azahar, melonDS, Flycast, Cemu, EKA2L1, XenDroid, J2ME Loader and DroidArcadia (by file); Vita3K, ARMSX3, PocketTrophy and BachataS4 (by title ID); GameNative / PocketRig (by Steam app ID, or `GOG:id` / `EPIC:id`).
+
+Your Pocket emulators are sent a `com.hcode91.pocket.LAUNCH_GAME` request: PocketChroma, PocketPenguin, PocketSprout, PocketReel and PocketCarioca with the game file as its data, PocketPlug with the machine's set name as the `game_id` extra. A version that doesn't answer it yet opens on its own game list. PocketOuya, PocketCentury, PocketPager and PocketR5900 open on their own screen.
+
+Emulators that can't be told which game to start (RPCSX, and any other emulator the app recognises on your phone, such as 86BoxDroid, WinUAE, AppleWinDroid, Delta Touch, DroidDeck or GameHub) are listed under **Other emulators on this phone**: their tile opens the emulator, you pick the game there, and play time is still tracked.
+
 ## Platforms
 
 **Setup → Platforms** lists every system you play, so none get left out. It starts with all the systems your emulators cover (Nintendo, Sony, Sega, Atari, NEC/SNK, arcade, other consoles, computers and game engines), plus Android, Legacy Android, iOS, Windows Phone, Switch 2 and Windows PC, and everything your own Pocket emulators play (PocketPlug's plug-and-play games, LCD games, chess computers and vintage computers; Zeebo, GP2X, LeapFrog Didj, Monon Color, VideoNow, RIM pagers and more). Built-in platforms added in later versions join your list automatically, unless you'd removed them. Each one shows the emulators that play it and how many of your games are on it. Remove any you don't use, add your own, or add back the built-in ones you removed. When you type a game's platform, matching platforms from this list are offered.

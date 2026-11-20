@@ -173,7 +173,62 @@ object Emulators {
             listOf("com.bachatas4.android/.DirectLaunchActivity", "com.bachatas4.android.github/com.bachatas4.android.DirectLaunchActivity"),
             EmuInput.ID, listOf("ps4"), idHint = "PS4 title ID, e.g. CUSA00001",
         ) { i, l, _ -> i.putExtra("game_id", l.gameId.trim()) },
+        Emulator(
+            "pockettrophy", "PocketTrophy", listOf("com.hcode91.pockettrophy/com.armsx2.Main"),
+            EmuInput.ID, listOf("ps3"), idHint = "PS3 title ID, e.g. BLUS30443",
+        ) { i, l, _ -> i.action = Intent.ACTION_VIEW; i.putExtra("title_id", l.gameId.trim()) },
+        Emulator(
+            "gamenative", "GameNative / PocketRig", listOf("app.gamenative/app.gamenative.MainActivity"),
+            EmuInput.ID, listOf("pc", "windows", "steam"), idHint = "Steam app ID, e.g. 1145360 (GOG:id or EPIC:id for those stores)",
+        ) { i, l, _ ->
+            // GameNative's own launch request: the game's ID and which store it's from.
+            val (source, id) = gameNativeId(l.gameId)
+            i.action = "app.gamenative.LAUNCH_GAME"
+            i.putExtra("app_id", id)
+            i.putExtra("game_source", source)
+        },
+        // RPCSX only starts games from its own list, so this opens it.
+        Emulator("rpcsx", "RPCSX", listOf("net.rpcsx/*"), EmuInput.NONE, listOf("ps3")) { _, _, _ -> },
+        // Your own Pocket emulators. Each is asked to start the game with POCKET_LAUNCH; a version
+        // that doesn't know that request yet simply opens on its own game list.
+        Emulator("pocketplug", "PocketPlug", listOf("com.hcode91.pocketplug/*"), EmuInput.ID, listOf("plug"),
+            idHint = "Machine's set name, e.g. 168pcase") { i, l, _ -> pocket(i, null, l.gameId) },
+        Emulator("pocketchroma", "PocketChroma", listOf("com.hcode91.pocketchroma/*"), EmuInput.FILE, listOf("monon"))
+            { i, _, uri -> pocket(i, uri, "") },
+        Emulator("pocketpenguin", "PocketPenguin", listOf("com.hcode91.pocketpenguin/*"), EmuInput.FILE, listOf("gp2x", "wiz", "caanoo"))
+            { i, _, uri -> pocket(i, uri, "") },
+        Emulator("pocketsprout", "PocketSprout", listOf("com.hcode91.pocketsprout/*"), EmuInput.FILE, listOf("didj", "leapfrog"))
+            { i, _, uri -> pocket(i, uri, "") },
+        Emulator("pocketreel", "PocketReel", listOf("com.hcode91.pocketreel/*"), EmuInput.FILE, listOf("videonow"))
+            { i, _, uri -> pocket(i, uri, "") },
+        Emulator(
+            "pocketcarioca", "PocketCarioca", listOf("com.hcode91.pocketcarioca/*", "io.github.zeebxteam.zeebx/*"),
+            EmuInput.FILE, listOf("zeebo"),
+        ) { i, _, uri -> pocket(i, uri, "") },
+        Emulator("pocketouya", "PocketOuya", listOf("io.github.hozdogus.pocketouya/*"), EmuInput.NONE, listOf("ouya")) { i, _, _ -> pocket(i, null, "") },
+        Emulator("pocketcentury", "PocketCentury", listOf("com.hcode91.pocketcentury/*"), EmuInput.NONE, listOf("100-in-1", "sy-909"))
+            { i, _, _ -> pocket(i, null, "") },
+        Emulator("pocketpager", "PocketPager", listOf("com.hcode91.pocketpager/*"), EmuInput.NONE, listOf("rim", "pager"))
+            { i, _, _ -> pocket(i, null, "") },
+        Emulator("pocketr5900", "PocketR5900", listOf("com.ps2x.runner/*"), EmuInput.NONE, listOf("ps2")) { _, _, _ -> },
     )
+
+    /** The request your Pocket emulators answer to start a game: the file as data, or the game's ID. */
+    const val POCKET_LAUNCH = "com.hcode91.pocket.LAUNCH_GAME"
+
+    private fun pocket(i: Intent, uri: Uri?, id: String) {
+        i.action = POCKET_LAUNCH
+        if (uri != null) i.data = uri
+        if (id.isNotBlank()) i.putExtra("game_id", id.trim())
+    }
+
+    /** "1145360" is a Steam game; "GOG:1207658924" and "EPIC:abc" name the store. Returns (store, id). */
+    fun gameNativeId(text: String): Pair<String, Int> {
+        val t = text.trim()
+        val source = t.substringBefore(':', "STEAM").trim().uppercase().ifBlank { "STEAM" }
+        val id = t.substringAfter(':').trim().toIntOrNull() ?: -1
+        return source to id
+    }
 
     fun byKey(key: String) = all.firstOrNull { it.key == key }
 
@@ -182,6 +237,11 @@ object Emulators {
         val pm = ctx.packageManager
         for (c in e.components) {
             val pkg = c.substringBefore("/")
+            // "package/*": whichever activity the app opens with.
+            if (c.endsWith("/*")) {
+                pm.getLaunchIntentForPackage(pkg)?.component?.let { return it }
+                continue
+            }
             val act = c.substringAfter("/").let { if (it.startsWith(".")) pkg + it else it }
             val cn = ComponentName(pkg, act)
             try {

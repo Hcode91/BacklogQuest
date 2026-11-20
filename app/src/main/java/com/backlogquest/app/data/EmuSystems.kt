@@ -154,7 +154,7 @@ object EmuSystems {
         Info("ppsspp", listOf("PPSSPP", "PPSSPP Gold"), listOf("org.ppsspp"), "Sony PSP"),
         Info("vita3k", listOf("Vita3K"), listOf("org.vita3k"), "Sony PS Vita"),
         Info(
-            "rpcsx", listOf("RPCSX", "RPCSX UI", "RPCS3"), emptyList(),
+            "rpcsx", listOf("RPCSX", "RPCSX UI", "RPCS3"), listOf("net.rpcsx"),
             "Sony PlayStation 3 (experimental)",
             listOf("Most PS3 games aren't playable on phones yet.", "Needs the PS3 firmware file (PS3UPDAT.PUP) from Sony."),
         ),
@@ -171,7 +171,7 @@ object EmuSystems {
         Info("xendroid", listOf("XenDroid"), listOf("xendroid"), "Microsoft Xbox 360 (experimental)", listOf("Based on Xenia Edge.")),
         Info("j2me", listOf("J2ME Loader"), listOf("ru.playsoftware.j2meloader"), "Java (J2ME) phone games"),
         Info(
-            "pocketouya", listOf("PocketOuya", "PocketMicro"), listOf("com.hcode91.pocketmicro", "com.hcode91.pocketouya"),
+            "pocketouya", listOf("PocketOuya", "PocketMicro"), listOf("io.github.hozdogus.pocketouya", "com.hcode91.pocketmicro"),
             "Ouya games",
             listOf("Converts a game's original Ouya .apk so it installs and runs on modern Android."),
         ),
@@ -191,7 +191,7 @@ object EmuSystems {
         ),
         Info("pocketpear", listOf("PocketPear"), listOf("com.hcode91.pocketpear"), "iPhone (iOS) games (experimental)"),
         Info(
-            "pocketr5900", listOf("PocketR5900", "PS2Recomp"), listOf("com.hcode91.pocketr5900"),
+            "pocketr5900", listOf("PocketR5900", "PS2Recomp"), listOf("com.ps2x.runner", "com.hcode91.pocketr5900"),
             "Sony PlayStation 2 (static recompiler, experimental)",
             listOf("Recompiles a PS2 game's code ahead of time instead of emulating it as it runs."),
         ),
