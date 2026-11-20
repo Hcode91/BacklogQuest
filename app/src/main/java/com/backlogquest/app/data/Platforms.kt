@@ -209,6 +209,93 @@ object Platforms {
 
     /** Families in the order of the built-in list, then "Your own". */
     val families: List<String> = defaults.map { it.family }.distinct() + "Your own"
+
+    /** Other ways a platform gets written (short names, store names, device names), to match games to it. */
+    private val ALIASES: Map<String, List<String>> = mapOf(
+        "NES" to listOf("famicom", "nintendo entertainment system"),
+        "Famicom Disk System" to listOf("fds"),
+        "SNES" to listOf("super nintendo", "super famicom", "sfc", "snes/super famicom", "super nes"),
+        "Nintendo 64" to listOf("n64"),
+        "Game Boy" to listOf("gb", "gameboy"),
+        "Game Boy Color" to listOf("gbc", "gameboy color"),
+        "Game Boy Advance" to listOf("gba", "gameboy advance"),
+        "Nintendo DS" to listOf("ds", "nds"),
+        "Nintendo DSi" to listOf("dsi"),
+        "Nintendo 3DS" to listOf("3ds", "n3ds", "new 3ds", "new nintendo 3ds"),
+        "GameCube" to listOf("gc", "gcn", "nintendo gamecube", "ngc"),
+        "Wii" to listOf("nintendo wii"),
+        "Wii U" to listOf("nintendo wii u"),
+        "Nintendo Switch" to listOf("switch", "ns", "switch 1"),
+        "Nintendo Switch 2" to listOf("switch 2", "ns2"),
+        "PlayStation" to listOf("ps1", "psx", "psone", "ps one", "playstation 1", "sony playstation"),
+        "PlayStation 2" to listOf("ps2"),
+        "PSP" to listOf("playstation portable"),
+        "PS Vita" to listOf("vita", "playstation vita", "psv"),
+        "PlayStation 3" to listOf("ps3"),
+        "PlayStation 4" to listOf("ps4"),
+        "Xbox 360" to listOf("x360"),
+        "SG-1000" to listOf("sg1000", "sega sg-1000"),
+        "Master System" to listOf("sms", "sega master system"),
+        "Game Gear" to listOf("gg", "sega game gear"),
+        "Mega Drive / Genesis" to listOf("genesis", "mega drive", "megadrive", "sega genesis", "sega mega drive", "md", "genesis/mega drive"),
+        "Mega-CD" to listOf("sega cd", "mega cd"),
+        "32X" to listOf("sega 32x"),
+        "Saturn" to listOf("sega saturn"),
+        "Dreamcast" to listOf("dc", "sega dreamcast"),
+        "Atari 2600" to listOf("2600", "vcs", "atari vcs"),
+        "Atari 7800" to listOf("7800"),
+        "Atari Lynx" to listOf("lynx"),
+        "Atari Jaguar" to listOf("jaguar"),
+        "PC Engine / TurboGrafx-16" to listOf("pc engine", "turbografx", "turbografx-16", "tg16", "pce", "pc engine/turbografx-16"),
+        "Neo Geo" to listOf("neo geo aes", "neo geo mvs", "neogeo"),
+        "Neo Geo Pocket" to listOf("ngp"),
+        "Neo Geo Pocket Color" to listOf("ngpc"),
+        "Arcade (MAME / FinalBurn Neo)" to listOf("arcade", "mame", "fbneo"),
+        "3DO" to listOf("3do interactive multiplayer"),
+        "WonderSwan Color" to listOf("wsc"),
+        "Ouya" to listOf("ouya"),
+        "Android" to listOf("phone", "android phone", "mobile"),
+        "iOS" to listOf("iphone", "ipad", "ios games"),
+        "Nokia N-Gage" to listOf("n-gage", "ngage"),
+        "Java phone games" to listOf("j2me", "java", "java me"),
+        "Windows PC" to listOf("pc", "windows", "steam", "epic", "gog", "steam deck"),
+        "DOS PC" to listOf("dos", "ms-dos"),
+        "Commodore Amiga" to listOf("amiga"),
+        "Commodore 64" to listOf("c64"),
+        "ZX Spectrum" to listOf("spectrum", "zx spectrum 48k"),
+        "Apple II" to listOf("apple ii", "apple 2", "apple ][", "appleii"),
+        "Atari 8-bit computers (400 / 800 / XL / XE)" to listOf("atari 8-bit", "atari 800", "atari xl", "atari xe"),
+        "Zeebo" to listOf("zeebo"),
+    )
+
+    /** Lowercase letters and digits only. */
+    fun norm(s: String): String = buildString { s.lowercase().forEach { if (it.isLetterOrDigit()) append(it) } }
+
+    /**
+     * Matches games to your platforms. A game's platform is what you set on it, or its device's name
+     * when that's blank (so a game on your Switch 2 counts for Nintendo Switch 2, and one on PC for Windows PC).
+     */
+    class Matcher(mine: List<String>) {
+        private val byKey = HashMap<String, String>()
+
+        init {
+            // Names first, so a platform's own name always wins over another one's alias.
+            mine.forEach { byKey.putIfAbsent(norm(it), it) }
+            mine.forEach { p -> ALIASES[p].orEmpty().forEach { byKey.putIfAbsent(norm(it), p) } }
+        }
+
+        /** Which of your platforms [text] is, if any. */
+        fun of(text: String): String? = byKey[norm(text)]
+
+        fun of(g: Game, s: AppState): String? = of(g.platform.ifBlank { deviceName(s, g.device) })
+
+        /** The first of a wishlist game's platforms that's one of yours. */
+        fun of(w: WishItem): String? = w.platforms.firstNotNullOfOrNull { of(it) }
+
+        fun has(w: WishItem, platform: String) = w.platforms.any { of(it) == platform }
+
+        fun matches(platform: String, text: String) = of(text) == platform
+    }
 }
 
 /** The built-in platforms in the first version of the list, for saves made before new ones were recorded. */
