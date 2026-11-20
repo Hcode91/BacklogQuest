@@ -41,6 +41,12 @@ In **Games → Wishlist**, **Import CSV** adds games from CSV files such as Moby
 - Games that have no picture on the list can have one fetched from their own page straight after adding (ticked by default), the same way Fetch pictures works for CSV imports.
 - You choose the platform or list name the games are filed under. Adding to a name that already exists adds to that list.
 
+## Upcoming and New
+
+Two tabs of their own: **Upcoming** lists games coming out in the next 30 days, 3 months or 12 months, and **New** the ones released in the last 7 days, 30 days or 3 months. Only your platforms (Setup → Platforms) are included, Android and iOS too. Games are grouped by day, with their cover, your platforms they're on, genres and how many people are watching them on IGDB. A game already in your games or wishlist is marked. Tap one to open its IGDB page. **Only games people are watching** (on by default) hides the thousands of small store releases nobody follows. Lists are kept for six hours; **Refresh** asks again.
+
+The data comes from IGDB (the database most game-tracking apps use) through a free Twitch developer app: add its client ID and secret in **Setup → Releases**. They stay on the phone; the access token they buy is renewed by itself.
+
 ## Starting games and home-screen icons
 
 On a game, **How to start it** chooses the emulator (with the game's file or ID) or an Android app. **▶ Play** starts it and tracks play time; **Home icon** pins a tile with the game's cover to your home screen that does the same.

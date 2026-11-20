@@ -561,6 +561,83 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Looks up the latest release of each emulator with a GitHub link (or just those in [ids]). */
+    // ---------- Upcoming and just released (IGDB) ----------
+
+    /** A loaded list of releases and when it was fetched (milliseconds). */
+    class ReleaseList(val items: List<Igdb.Release>, val at: Long)
+
+    /** Loaded lists, keyed by what was asked for (see [releaseKey]). */
+    var releaseLists by mutableStateOf<Map<String, ReleaseList>>(emptyMap())
+        private set
+    /** The key being loaded, or null. */
+    var releasesBusy by mutableStateOf<String?>(null)
+        private set
+    var releasesError by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
+    /** IGDB's platforms matched to yours, for the platform list it was worked out from. */
+    private var igdbPlatforms: Pair<List<String>, Map<Long, String>>? = null
+
+    fun releaseKey(upcoming: Boolean, days: Int, watchedOnly: Boolean) =
+        "${if (upcoming) "up" else "new"}:$days:${if (watchedOnly) "w" else "all"}"
+
+    /**
+     * Loads upcoming releases (the next [days] days) or just-released games (the last [days] days)
+     * on your platforms. A list loaded in the last six hours is kept unless [force] is set.
+     */
+    fun loadReleases(upcoming: Boolean, days: Int, watchedOnly: Boolean, force: Boolean = false) {
+        val key = releaseKey(upcoming, days, watchedOnly)
+        val have = releaseLists[key]
+        if (!force && have != null && System.currentTimeMillis() - have.at < 6 * 3_600_000L) return
+        if (releasesBusy != null) return
+        val id = state.igdbClientId
+        val secret = state.igdbSecret
+        if (id.isBlank() || secret.isBlank()) {
+            releasesError = releasesError + (key to "Add your Twitch client ID and secret in Setup → Releases.")
+            return
+        }
+        releasesBusy = key
+        releasesError = releasesError - key
+        viewModelScope.launch {
+            try {
+                val list = withContext(Dispatchers.IO) { fetchReleases(id, secret, upcoming, days, watchedOnly) }
+                releaseLists = releaseLists + (key to ReleaseList(list, System.currentTimeMillis()))
+            } catch (e: Igdb.IgdbError) {
+                releasesError = releasesError + (key to e.message.orEmpty())
+            } catch (e: Exception) {
+                releasesError = releasesError + (key to "Couldn't reach IGDB. Check your connection and try again.")
+            } finally {
+                releasesBusy = null
+            }
+        }
+    }
+
+    /** Runs on a background thread. A refused token is replaced once, then the request repeated. */
+    private suspend fun fetchReleases(id: String, secret: String, upcoming: Boolean, days: Int, watchedOnly: Boolean): List<Igdb.Release> {
+        suspend fun freshToken(): String {
+            val t = Igdb.token(id, secret)
+            withContext(Dispatchers.Main) { update { it.copy(igdbToken = t.value, igdbTokenExpires = t.expiresAt) } }
+            return t.value
+        }
+        var token = state.igdbToken.takeIf { it.isNotBlank() && state.igdbTokenExpires > System.currentTimeMillis() } ?: freshToken()
+        repeat(2) { attempt ->
+            try {
+                val mine = state.platforms
+                val map = igdbPlatforms?.takeIf { it.first == mine }?.second
+                    ?: Igdb.mapPlatforms(Igdb.platforms(id, token), mine).also { igdbPlatforms = mine to it }
+                if (map.isEmpty()) throw Igdb.IgdbError("None of your platforms (Setup → Platforms) are on IGDB.")
+                val now = System.currentTimeMillis() / 1000
+                val from = if (upcoming) now else now - days * 86_400L
+                val to = if (upcoming) now + days * 86_400L else now
+                return Igdb.releases(id, token, map, from, to, newestFirst = !upcoming, watchedOnly = watchedOnly)
+            } catch (e: Igdb.TokenExpired) {
+                if (attempt == 1) throw Igdb.IgdbError("IGDB refused the access token. Check the client ID and secret in Setup → Releases.")
+                token = freshToken()
+            }
+        }
+        return emptyList()
+    }
+
     fun checkEmulators(ids: Set<String>? = null, quiet: Boolean = false) {
         if (emuBusy) return
         val targets = state.emulators.filter { it.repo.isNotBlank() && (ids == null || it.id in ids) }

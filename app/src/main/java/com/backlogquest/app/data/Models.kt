@@ -143,6 +143,12 @@ data class AppState(
     val achTotals: Map<String, Int> = emptyMap(),
     /** The day those account totals were last fetched. */
     val achTotalsAt: String = "",
+    /** A Twitch developer app's client ID and secret, for upcoming and new releases from IGDB. */
+    val igdbClientId: String = "",
+    val igdbSecret: String = "",
+    /** The IGDB access token those bought, and when it runs out (milliseconds). */
+    val igdbToken: String = "",
+    val igdbTokenExpires: Long = 0,
 )
 
 /** One completion from your imported HowLongToBeat history. */

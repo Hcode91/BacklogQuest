@@ -55,6 +55,8 @@ object Store {
         o.put("raUser", s.raUser)
         o.put("raKey", s.raKey)
         o.put("itadKey", s.itadKey)
+        o.put("igdbClientId", s.igdbClientId).put("igdbSecret", s.igdbSecret)
+        o.put("igdbToken", s.igdbToken).put("igdbTokenExpires", s.igdbTokenExpires)
         o.put("steamKey", s.steamKey)
         o.put("steamProfile", s.steamProfile)
         o.put("achTotals", JSONObject().apply { s.achTotals.forEach { (k, v) -> put(k, v) } })
@@ -107,6 +109,10 @@ object Store {
                 raUser = o.str("raUser"),
                 raKey = o.str("raKey"),
                 itadKey = o.str("itadKey"),
+                igdbClientId = o.str("igdbClientId"),
+                igdbSecret = o.str("igdbSecret"),
+                igdbToken = o.str("igdbToken"),
+                igdbTokenExpires = o.optLong("igdbTokenExpires", 0),
                 steamKey = o.str("steamKey"),
                 steamProfile = o.str("steamProfile"),
                 achTotals = o.optJSONObject("achTotals")?.let { a ->
