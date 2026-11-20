@@ -43,7 +43,7 @@ In **Games → Wishlist**, **Import CSV** adds games from CSV files such as Moby
 
 ## Platforms
 
-**Setup → Platforms** lists every system you play, so none get left out. It starts with all the systems your emulators cover (Nintendo, Sony, Sega, Atari, NEC/SNK, arcade, other consoles, computers and game engines), plus Android, Legacy Android, iOS, Windows Phone, Switch 2 and Windows PC. Each one shows the emulators that play it and how many of your games are on it. Remove any you don't use, add your own, or add back the built-in ones you removed. When you type a game's platform, matching platforms from this list are offered.
+**Setup → Platforms** lists every system you play, so none get left out. It starts with all the systems your emulators cover (Nintendo, Sony, Sega, Atari, NEC/SNK, arcade, other consoles, computers and game engines), plus Android, Legacy Android, iOS, Windows Phone, Switch 2 and Windows PC, and everything your own Pocket emulators play (PocketPlug's plug-and-play games, LCD games, chess computers and vintage computers; Zeebo, GP2X, LeapFrog Didj, Monon Color, VideoNow, RIM pagers and more). Built-in platforms added in later versions join your list automatically, unless you'd removed them. Each one shows the emulators that play it and how many of your games are on it. Remove any you don't use, add your own, or add back the built-in ones you removed. When you type a game's platform, matching platforms from this list are offered.
 
 ## Your own sources
 

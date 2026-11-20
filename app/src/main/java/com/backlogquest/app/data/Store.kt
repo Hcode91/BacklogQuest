@@ -63,6 +63,8 @@ object Store {
         o.put("notFound", JSONArray().apply { s.notFound.forEach { put(it) } })
         o.put("psnId", s.psnId)
         o.put("platforms", JSONArray().apply { s.platforms.forEach { put(it) } })
+        // The built-in list as it was, so platforms added to it later can be added to yours.
+        o.put("platformDefaults", JSONArray().apply { Platforms.defaultNames.forEach { put(it) } })
         o.put("emulators", JSONArray().apply {
             s.emulators.forEach { e ->
                 put(
@@ -117,8 +119,13 @@ object Store {
                 notFound = o.optJSONArray("notFound")?.let { a -> (0 until a.length()).map { a.strAt(it) }.toSet() } ?: emptySet(),
                 psnId = o.str("psnId"),
                 // Saved before the list existed: start from the built-in one.
-                platforms = o.optJSONArray("platforms")?.let { a -> (0 until a.length()).map { a.strAt(it) } }
-                    ?: Platforms.defaultNames,
+                platforms = o.optJSONArray("platforms")?.let { a ->
+                    val mine = (0 until a.length()).map { a.strAt(it) }
+                    // Built-in platforms that are new since you last saved (and that you haven't removed) are added.
+                    val known = o.optJSONArray("platformDefaults")?.let { k -> (0 until k.length()).map { k.strAt(it) } }
+                        ?: PLATFORMS_V1
+                    mine + Platforms.defaultNames.filter { n -> n !in known && mine.none { it.equals(n, ignoreCase = true) } }
+                } ?: Platforms.defaultNames,
                 emulators = o.optJSONArray("emulators")?.let { a ->
                     (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { e ->
                         EmuEntry(
