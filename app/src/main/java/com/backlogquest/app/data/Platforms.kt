@@ -22,6 +22,8 @@ object Platforms {
         "ColecoVision" to "adam",
         "Radofin 1292 / 1392 APVS" to "1292apvs",
         "Entex Adventure Vision" to "advision",
+        "APF M-1000 / MP1000" to "apfm1000",
+        "Millennium Arcade 3D 15-in-1" to "arcade3d",
         "Retro Dance Mat" to "110dance",
         "168-in-1 Game Phone Case" to "168pcase",
         "36-in-1 Classic Games Phone Case" to "36pcase",
@@ -153,6 +155,7 @@ object Platforms {
             "Zeebo" to listOf("PocketCarioca"),
             "Radofin 1292 / 1392 APVS" to listOf(PP),
             "Entex Adventure Vision" to listOf(PP),
+            "APF M-1000 / MP1000" to listOf(PP),
         ),
         group(
             "Phones",
@@ -194,6 +197,7 @@ object Platforms {
             "Advance Bright Joystick 14-in-1" to listOf(PP),
             "Advance Bright Wireless Tennis" to listOf(PP),
             "Advance Bright Kick Boxing" to listOf(PP),
+            "Millennium Arcade 3D 15-in-1" to listOf(PP),
         ),
         group(
             "Virtual pets, tabletops and gadgets",
