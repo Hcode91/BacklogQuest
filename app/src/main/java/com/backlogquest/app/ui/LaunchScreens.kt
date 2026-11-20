@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -92,6 +93,10 @@ fun LaunchSetupDialog(
     var emu by remember { mutableStateOf(current?.emu?.takeIf { it.isNotBlank() } ?: suggested?.key ?: emulators.firstOrNull()?.key.orEmpty()) }
     var uri by remember { mutableStateOf(current?.uri.orEmpty()) }
     var gameId by remember { mutableStateOf(current?.gameId.orEmpty()) }
+    // PocketPlug: fill in the machine's set name from the game's platform.
+    LaunchedEffect(emu) {
+        if (emu == "pocketplug" && gameId.isBlank()) gameId = com.backlogquest.app.data.Platforms.pocketPlugSets[platform].orEmpty()
+    }
     var core by remember { mutableStateOf(current?.core?.takeIf { it.isNotBlank() } ?: Emulators.coreFor(platform)) }
     var pkg by remember { mutableStateOf(if (current?.mode == "app") current?.pkg.orEmpty() else "") }
     var appSearch by remember { mutableStateOf("") }

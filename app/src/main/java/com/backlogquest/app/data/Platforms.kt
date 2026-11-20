@@ -14,6 +14,58 @@ object Platforms {
     private val RA = "RetroArch"
     private val PP = "PocketPlug"
 
+    /**
+     * The PocketPlug set name for each PocketPlug platform, filled in for you when you set up a
+     * tile with PocketPlug. Machines with several sets use the main one.
+     */
+    val pocketPlugSets: Map<String, String> = mapOf(
+        "ColecoVision" to "adam",
+        "Radofin 1292 / 1392 APVS" to "1292apvs",
+        "Entex Adventure Vision" to "advision",
+        "Retro Dance Mat" to "110dance",
+        "168-in-1 Game Phone Case" to "168pcase",
+        "36-in-1 Classic Games Phone Case" to "36pcase",
+        "240-in-1 Mini Arcade" to "240in1ar",
+        "A6Plus Mini Arcade (912-in-1)" to "a6plus",
+        "265-in-1 Handheld" to "265games",
+        "500-in-1 Handheld Game" to "500in1hh",
+        "Joystick88" to "88in1joy",
+        "Atari Flashback" to "afbm7800",
+        "Air-Blaster Joystick" to "airblsjs",
+        "Advance Bright 4 Player System" to "abl4play",
+        "Advance Bright Pinball" to "ablpinb",
+        "Advance Bright Super Ping Pong" to "ablping",
+        "Advance Bright Mini Joystick 80-in-1" to "ablmini",
+        "Advance Bright Joystick 14-in-1" to "ablwikid",
+        "Advance Bright Wireless Tennis" to "abltenni",
+        "Advance Bright Kick Boxing" to "ablkickb",
+        "Egg Pet - Generation 1" to "tama",
+        "Egg Pet - Angel" to "tamaang",
+        "Egg Pet - Ocean" to "oceanpet",
+        "Chibi Pachi: Alien Fever" to "alienfev",
+        "Coleco Alien Attack (tabletop)" to "alnattck",
+        "Tomy Alien Chase (tabletop)" to "alnchase",
+        "Playskool Alphie (robot)" to "alphie",
+        "Coleco Amaze-A-Tron" to "amaztron",
+        "Milton Bradley Arcade Mania" to "arcmania",
+        "4004 Nixie Clock" to "4004clk",
+        "Mephisto Academy" to "academy",
+        "Mephisto Almeria" to "alm32",
+        "Mephisto Amsterdam" to "amsterd",
+        "ARB V2 Sargon 4.0" to "arbv2",
+        "Novag Accord" to "accord",
+        "Atari 8-bit computers (400 / 800 / XL / XE)" to "a800xl",
+        "Coleco Adam" to "adam",
+        "Acorn Archimedes" to "aa310",
+        "Acorn A7000" to "a7000",
+        "Acorn System 1" to "acrnsys1",
+        "Rockwell AIM 65" to "aim65",
+        "Altair 8800" to "al8800b",
+        "TM 990/189 University Board" to "990189",
+        "AT&T UNIX PC (3B1)" to "3b1",
+        "NGEN CP-001 Workstation" to "ngen",
+    )
+
     val defaults: List<Platform> = listOf(
         group(
             "Nintendo",
@@ -151,6 +203,9 @@ object Platforms {
             "Chibi Pachi: Alien Fever" to listOf(PP),
             "Coleco Alien Attack (tabletop)" to listOf(PP),
             "Tomy Alien Chase (tabletop)" to listOf(PP),
+            "Playskool Alphie (robot)" to listOf(PP),
+            "Coleco Amaze-A-Tron" to listOf(PP),
+            "Milton Bradley Arcade Mania" to listOf(PP),
             "4004 Nixie Clock" to listOf(PP),
         ),
         group(
