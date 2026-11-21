@@ -23,6 +23,7 @@ object Platforms {
         "Radofin 1292 / 1392 APVS" to "1292apvs",
         "Entex Adventure Vision" to "advision",
         "APF M-1000 / MP1000" to "apfm1000",
+        "Bally Astrocade" to "astrocde",
         "Millennium Arcade 3D 15-in-1" to "arcade3d",
         "Mini Arcade Console 10-in-1" to "arcade10",
         "Retro Dance Mat" to "110dance",
@@ -64,6 +65,8 @@ object Platforms {
         "Novag Accord" to "accord",
         "Fidelity Voice Chess Challenger" to "vcc",
         "Fidelity Advanced Voice Chess Challenger" to "avcc",
+        "Elektor AVR-Max Chess Computer" to "avrmax",
+        "Elektor ATM18 Mini Chess Computer" to "atm18mcc",
         "Atari 8-bit computers (400 / 800 / XL / XE)" to "a800xl",
         "Coleco Adam" to "adam",
         "Acorn Archimedes" to "aa310",
@@ -164,6 +167,7 @@ object Platforms {
             "Radofin 1292 / 1392 APVS" to listOf(PP),
             "Entex Adventure Vision" to listOf(PP),
             "APF M-1000 / MP1000" to listOf(PP),
+            "Bally Astrocade" to listOf(PP),
         ),
         group(
             "Phones",
@@ -235,6 +239,8 @@ object Platforms {
             "Novag Accord" to listOf(PP),
             "Fidelity Voice Chess Challenger" to listOf(PP),
             "Fidelity Advanced Voice Chess Challenger" to listOf(PP),
+            "Elektor AVR-Max Chess Computer" to listOf(PP),
+            "Elektor ATM18 Mini Chess Computer" to listOf(PP),
         ),
         group(
             "Computers",
