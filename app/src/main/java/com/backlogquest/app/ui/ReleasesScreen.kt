@@ -1,7 +1,17 @@
 package com.backlogquest.app.ui
 
+import android.Manifest
 import android.content.Intent
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.backlogquest.app.data.ReleaseReminders
 import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -67,6 +77,39 @@ fun ReleasesScreen(vm: BacklogViewModel, upcoming: Boolean) {
     }
     val platformsFound = remember(list) { list?.items?.flatMap { it.platforms }?.groupingBy { it }?.eachCount()?.entries?.sortedByDescending { it.value }?.map { it.key }.orEmpty() }
     val shown = remember(list, platform) { list?.items?.filter { platform.isBlank() || platform in it.platforms }.orEmpty() }
+    // Reminders need permission to notify (Android 13 and later): asked for when an upcoming game
+    // is first wishlisted. Saying no keeps the game on the wishlist, just without the reminder.
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) vm.showToast("NO REMINDERS\nNotifications are off for BacklogQuest")
+    }
+    fun wish(r: Igdb.Release, p: String) {
+        vm.addReleaseToWishlist(r, p)
+        if (upcoming && s.releaseReminders && Build.VERSION.SDK_INT >= 33 && !ReleaseReminders.canNotify(ctx)) {
+            askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    val reminded = remember(s.releaseWatch) { s.releaseWatch.map { it.gameId }.toSet() }
+    var choosing by remember { mutableStateOf<Igdb.Release?>(null) }
+    choosing?.let { r ->
+        AlertDialog(
+            onDismissRequest = { choosing = null },
+            containerColor = BQ.Shell2,
+            title = { Text("Wishlist ${r.title} for…", color = BQ.Ink, fontSize = 17.sp) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    r.platforms.forEach { p ->
+                        Text(
+                            p,
+                            Modifier.fillMaxWidth().clickable { wish(r, p); choosing = null }.padding(vertical = 10.dp),
+                            color = BQ.B, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { choosing = null }) { Text("CANCEL", color = BQ.Muted) } },
+        )
+    }
     val zone = ZoneId.systemDefault()
     val today = LocalDate.now(zone)
     val byDay = remember(shown) { shown.groupBy { Instant.ofEpochSecond(it.date).atZone(zone).toLocalDate() } }
@@ -83,8 +126,9 @@ fun ReleasesScreen(vm: BacklogViewModel, upcoming: Boolean) {
                     if (list != null) Hint("${shown.size} game${if (shown.size == 1) "" else "s"}")
                 }
                 Hint(
-                    if (upcoming) "Games coming out on your platforms (Setup → Platforms), from IGDB."
-                    else "Games that came out recently on your platforms, from IGDB.",
+                    if (upcoming) "Games coming out on your platforms (Setup → Platforms), from IGDB. + WISH adds one to your " +
+                        "wishlist" + (if (s.releaseReminders) " and reminds you the day before it comes out." else ".")
+                    else "Games that came out recently on your platforms, from IGDB. + WISH adds one to your wishlist.",
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     windows.forEach { (d, label) -> TabChip(label, days == d) { days = d } }
@@ -129,9 +173,17 @@ fun ReleasesScreen(vm: BacklogViewModel, upcoming: Boolean) {
                 Text(dayLabel(day, today), Modifier.padding(top = 6.dp), color = BQ.B, fontFamily = BQ.Mono, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
             items(games, key = { "g:${it.gameId}" }) { r ->
-                ReleaseRow(r, known[normTitle(r.title)]) {
-                    runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(r.url))) }
-                }
+                ReleaseRow(
+                    r,
+                    known[normTitle(r.title)]?.let { m ->
+                        if (r.gameId in reminded && s.releaseReminders && upcoming) "$m · REMINDER ON" else m
+                    },
+                    onOpen = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(r.url))) } },
+                    onWish = {
+                        // One platform: straight on. Several: ask which (on this phone it can be any of them).
+                        if (r.platforms.size == 1) wish(r, r.platforms[0]) else choosing = r
+                    },
+                )
             }
         }
         if (list != null && list.items.size >= 1000) item {
@@ -154,7 +206,7 @@ private fun dayLabel(day: LocalDate, today: LocalDate): String {
 }
 
 @Composable
-private fun ReleaseRow(r: Igdb.Release, mark: String?, onOpen: () -> Unit) {
+private fun ReleaseRow(r: Igdb.Release, mark: String?, onOpen: () -> Unit, onWish: () -> Unit) {
     Tile(Modifier.fillMaxWidth(), onClick = onOpen, padding = 8.dp) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Cover(r.title, r.platforms.firstOrNull().orEmpty(), r.cover, Modifier.width(56.dp), small = true)
@@ -167,6 +219,13 @@ private fun ReleaseRow(r: Igdb.Release, mark: String?, onOpen: () -> Unit) {
                 ).joinToString(" · ")
                 if (about.isNotBlank()) Text(about, color = BQ.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (mark != null) Text(mark, color = BQ.A, fontFamily = BQ.Mono, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            }
+            if (mark == null) {
+                Text(
+                    "+ WISH",
+                    Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onWish).padding(horizontal = 8.dp, vertical = 10.dp),
+                    color = BQ.B, fontFamily = BQ.Mono, fontWeight = FontWeight.Bold, fontSize = 12.sp,
+                )
             }
         }
     }

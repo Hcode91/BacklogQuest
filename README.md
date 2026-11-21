@@ -45,6 +45,8 @@ In **Games → Wishlist**, **Import CSV** adds games from CSV files such as Moby
 
 Two tabs of their own: **Upcoming** lists games coming out in the next 30 days, 3 months or 12 months, and **New** the ones released in the last 7 days, 30 days or 3 months. Only your platforms (Setup → Platforms) are included, Android and iOS too. Games are grouped by day, with their cover, your platforms they're on, genres and how many people are watching them on IGDB. A game already in your games or wishlist is marked. Tap one to open its IGDB page. **Only games people are watching** (on by default) hides the thousands of small store releases nobody follows. Lists are kept for six hours; **Refresh** asks again.
 
+**+ WISH** puts a game on your wishlist, under the **IGDB** source (so it shows in Discover's My sources and on the Spin wheel) with its cover. A game out on several of your platforms asks which one. An upcoming game you wishlist also gets a **reminder**: the day before it comes out you get a notification ("Out tomorrow: …"), or on the day if the phone was off the day before. A background check runs twice a day and looks the dates up on IGDB again, so a delayed game is announced on its new date. Turn reminders off in **Setup → Releases**; Android 13 and later ask for permission to notify the first time.
+
 The data comes from IGDB (the database most game-tracking apps use) through a free Twitch developer app: add its client ID and secret in **Setup → Releases**. They stay on the phone; the access token they buy is renewed by itself.
 
 ## Starting games and home-screen icons

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import com.backlogquest.app.data.Platforms
+import com.backlogquest.app.data.ReleaseReminders
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -69,7 +70,11 @@ fun SetupScreen(vm: BacklogViewModel) {
     var steamKeyText by remember { mutableStateOf(s.steamKey) }
     var steamProfileText by remember { mutableStateOf(s.steamProfile) }
     var psnText by remember { mutableStateOf(s.psnId) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     var igdbIdText by remember { mutableStateOf(s.igdbClientId) }
+    val askNotify = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { }
     var igdbSecretText by remember { mutableStateOf(s.igdbSecret) }
     var newDevice by remember { mutableStateOf("") }
     var newPlatform by remember { mutableStateOf("") }
@@ -340,6 +345,22 @@ fun SetupScreen(vm: BacklogViewModel) {
                     visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                 )
                 Hint("Only your platforms are asked about. Change them in Setup → Platforms.")
+                CheckRow(
+                    "Remind me the day before",
+                    "When a game you wishlisted from the Upcoming tab comes out tomorrow, you get a notification. " +
+                        "Dates are checked on IGDB twice a day, so a delay moves the reminder too.",
+                    s.releaseReminders,
+                ) {
+                    val on = !s.releaseReminders
+                    vm.setReleaseReminders(on)
+                    if (on && android.os.Build.VERSION.SDK_INT >= 33 && !ReleaseReminders.canNotify(context)) {
+                        askNotify.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+                if (s.releaseReminders && !ReleaseReminders.canNotify(context)) {
+                    Hint("Notifications are off for BacklogQuest, so reminders can't be shown. Turn them on in Android's settings for the app.")
+                }
+                if (s.releaseWatch.isNotEmpty()) Hint("Reminders set: ${s.releaseWatch.size}")
             }
         }
 

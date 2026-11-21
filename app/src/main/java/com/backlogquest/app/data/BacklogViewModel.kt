@@ -185,6 +185,20 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
         ids.forEach { wishImages.remove(it) }
         rebuildRef()
         saveImports()
+        pruneReleaseWatch()
+    }
+
+    /** Drops reminders for games no longer in any imported list. */
+    private fun pruneReleaseWatch() {
+        if (state.releaseWatch.isEmpty()) return
+        val present = csvLists.flatMap { l -> l.games.map { it.id } }.toSet()
+        if (state.releaseWatch.any { it.wishId !in present }) update { s -> s.copy(releaseWatch = s.releaseWatch.filter { it.wishId in present }) }
+    }
+
+    /** Turns release reminders on or off. */
+    fun setReleaseReminders(on: Boolean) {
+        update { it.copy(releaseReminders = on) }
+        ReleaseReminders.schedule(getApplication(), on && state.releaseWatch.isNotEmpty())
     }
 
     /** Pictures found for imported games, by game id. */
@@ -276,6 +290,38 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
         showToast("ADDED ${"%,d".format(added.size)} GAME${if (added.size == 1) "" else "S"}\n${list.source} · ${list.platform}")
     }
 
+    /**
+     * Adds a game from the Upcoming or New tab to your wishlist, on [platform]. It joins the "IGDB"
+     * source's list for that platform (shown in Discover and on the Spin wheel) with its cover.
+     */
+    fun addReleaseToWishlist(r: Igdb.Release, platform: String) {
+        val id = "igdb:${r.gameId}"
+        val same = csvLists.firstOrNull { WishImport.sourceOf(it) == IGDB_SOURCE && it.platform.equals(platform, ignoreCase = true) }
+        if (same?.games?.any { it.id == id } == true) {
+            showToast("ALREADY ON YOUR WISHLIST\n${r.title}")
+            return
+        }
+        val list = CsvList(
+            same?.platform ?: platform, same?.file ?: "igdb",
+            same?.games.orEmpty() + CsvGame(id, r.title, r.url, r.genres), source = IGDB_SOURCE,
+        )
+        csvLists = WishImport.merge(csvLists, listOf(list))
+        if (r.cover.isNotBlank()) wishImages[id] = r.cover
+        // A game you'd hidden from the wishlist before comes back, and an upcoming one gets a reminder.
+        val upcoming = r.date > System.currentTimeMillis() / 1000
+        update { s ->
+            s.copy(
+                hiddenWish = s.hiddenWish - id,
+                releaseWatch = if (upcoming) (s.releaseWatch.filterNot { it.gameId == r.gameId && it.platform == platform } +
+                    ReleaseWatch(r.gameId, r.title, platform, r.date)) else s.releaseWatch,
+            )
+        }
+        if (upcoming && state.releaseReminders) ReleaseReminders.schedule(getApplication(), true)
+        rebuildRef()
+        saveImports()
+        showToast("ADDED TO WISHLIST\n${r.title} · $platform")
+    }
+
     fun removeCsvList(list: CsvList) {
         csvLists = csvLists.filter { it !== list }
         // Pictures of games only that list had; your other wishlist games keep theirs.
@@ -283,6 +329,7 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
         list.games.map { it.id }.filter { it !in kept }.forEach { wishImages.remove(it) }
         rebuildRef()
         saveImports()
+        pruneReleaseWatch()
     }
 
     /** Looks up a picture for each of [ids] from that game's link, one at a time. */
@@ -575,6 +622,9 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
     var releasesError by mutableStateOf<Map<String, String>>(emptyMap())
         private set
 
+    /** The source games added from the Upcoming and New tabs are listed under. */
+    val IGDB_SOURCE = "IGDB"
+
     /** IGDB's platforms matched to yours, for the platform list it was worked out from. */
     private var igdbPlatforms: Pair<List<String>, Map<Long, String>>? = null
 
@@ -804,6 +854,8 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
                 Store.loadState(dir) to Store.loadDataFile(dir)
             }
             if (saved != null) state = saved
+            // Keeps the release-reminder check scheduled (it survives restarts, but not an app update on every phone).
+            ReleaseReminders.schedule(getApplication(), state.releaseReminders && state.releaseWatch.isNotEmpty())
             if (file != null) {
                 fileRef = file.ref
                 fileState = file.state
