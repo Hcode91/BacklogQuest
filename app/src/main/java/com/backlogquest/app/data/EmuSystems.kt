@@ -185,9 +185,9 @@ object EmuSystems {
             listOf(
                 "Plug-and-play: Retro Dance Mat, 168-in-1 and 36-in-1 Game Phone Cases, 240-in-1 Mini Arcade, A6Plus Mini Arcade, 265-in-1 and 500-in-1 handhelds, Mini Arcade Console 10-in-1, Joystick88, Atari Flashback, Air-Blaster Joystick",
                 "Advance Bright TV games: 4 Player System, Pinball, Super Ping Pong, Mini Joystick 80-in-1, Joystick 14-in-1, Wireless Tennis, Kick Boxing; Millennium Arcade 3D 15-in-1",
-                "Consoles: Radofin 1292 / 1392 APVS (VC 4000 family), Entex Adventure Vision, APF M-1000 / MP1000, ColecoVision carts (through the Adam)",
+                "Consoles: Radofin 1292 / 1392 APVS (VC 4000 family), Entex Adventure Vision, APF M-1000 / MP1000, Bally Astrocade (Professional Arcade, Home Library Computer), ColecoVision carts (through the Adam)",
                 "Virtual pets and tabletops: Egg Pet (Generation 1, Angel, Ocean), Chibi Pachi: Alien Fever, Coleco Alien Attack, Tomy Alien Chase, Playskool Alphie, Coleco Amaze-A-Tron, Milton Bradley Arcade Mania; LED and LCD games: Tandy Arrange Ball, Epoch Astro Command, Elektronika Ataka Asteroidov and Autoslalom, Mattel Auto Race",
-                "Chess computers: Mephisto Academy, Almeria and Amsterdam, ARB V2 Sargon 4.0, Novag Accord, Fidelity Voice Chess Challenger and Advanced Voice Chess Challenger",
+                "Chess computers: Mephisto Academy, Almeria and Amsterdam, ARB V2 Sargon 4.0, Novag Accord, Fidelity Voice Chess Challenger and Advanced Voice Chess Challenger, Elektor AVR-Max and ATM18 Mini Chess Computer",
                 "Computers: Atari 400 / 800 / XL / XE, Coleco Adam, Acorn Archimedes, A7000 and System 1, AIM 65, Altair 8800, TM 990/189, AT&T UNIX PC, NGEN CP-001",
                 "Gadgets: 4004 Nixie Clock",
             ),
