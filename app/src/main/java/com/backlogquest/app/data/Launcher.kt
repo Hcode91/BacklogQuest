@@ -206,8 +206,8 @@ object Emulators {
             EmuInput.ID, listOf("zeebo"), idHint = "The game's title in PocketCarioca's library",
         ) { i, l, _ -> pocket(i, null, l.gameId) },
         Emulator(
-            "pocketouya", "PocketOuya", listOf("io.github.hozdogus.pocketouya/*"), EmuInput.ID, listOf("ouya", "windows phone"),
-            idHint = "The game's name or package in PocketOuya's library",
+            "pocketouya", "PocketMicro", listOf("com.hcode91.pocketmicro/*"), EmuInput.ID, listOf("ouya", "windows phone"),
+            idHint = "The game's name or package in PocketMicro's library",
         ) { i, l, _ -> pocket(i, null, l.gameId) },
         Emulator("pocketcentury", "PocketCentury", listOf("com.hcode91.pocketcentury/*"), EmuInput.NONE, listOf("100-in-1", "sy-909"))
             { i, _, _ -> pocket(i, null, "") },

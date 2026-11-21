@@ -171,7 +171,7 @@ object EmuSystems {
         Info("xendroid", listOf("XenDroid"), listOf("xendroid"), "Microsoft Xbox 360 (experimental)", listOf("Based on Xenia Edge.")),
         Info("j2me", listOf("J2ME Loader"), listOf("ru.playsoftware.j2meloader"), "Java (J2ME) phone games"),
         Info(
-            "pocketouya", listOf("PocketOuya", "PocketMicro"), listOf("io.github.hozdogus.pocketouya", "com.hcode91.pocketmicro"),
+            "pocketouya", listOf("PocketOuya", "PocketMicro"), listOf("com.hcode91.pocketmicro"),
             "Ouya games and Windows Phone games",
             listOf(
                 "Ouya: converts a game's original .apk so it installs and runs on modern Android.",
