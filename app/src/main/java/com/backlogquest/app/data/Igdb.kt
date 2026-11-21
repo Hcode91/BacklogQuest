@@ -57,7 +57,7 @@ object Igdb {
     }
 
     /** One query to IGDB, in its Apicalypse language. */
-    private fun query(clientId: String, token: String, endpoint: String, body: String): JSONArray {
+    internal fun query(clientId: String, token: String, endpoint: String, body: String): JSONArray {
         val r = Http.call(
             "$API/$endpoint", method = "POST",
             headers = mapOf("Client-ID" to clientId, "Authorization" to "Bearer $token", "Accept" to "application/json"),
@@ -99,6 +99,26 @@ object Igdb {
             val mineName = m.of(p.name) ?: m.of(p.abbreviation) ?: p.alternative.split(',', '/').firstNotNullOfOrNull { a -> m.of(a.trim()) }
             mineName?.let { p.id to it }
         }.toMap()
+    }
+
+    /** A release date row: which game, the platform's IGDB name, and the date. */
+    data class DateRow(val gameId: Long, val platform: String, val date: Long)
+
+    /** Every dated release of [games] (IGDB game ids), for checking wishlisted games' dates. */
+    fun datesFor(clientId: String, token: String, games: List<Long>): List<DateRow> {
+        val out = ArrayList<DateRow>()
+        for (chunk in games.chunked(200)) {
+            val rows = query(
+                clientId, token, "release_dates",
+                "fields game,date,platform.name; where game = (${chunk.joinToString(",")}) & date != null; limit 500;",
+            )
+            for (i in 0 until rows.length()) {
+                val r = rows.optJSONObject(i) ?: continue
+                val plat = r.optJSONObject("platform")?.optString("name").orEmpty()
+                if (plat.isNotBlank()) out += DateRow(r.optLong("game"), plat, r.optLong("date"))
+            }
+        }
+        return out
     }
 
     /** DLC, bundles, mods, episodes, seasons, forks, packs and updates aren't new games. */

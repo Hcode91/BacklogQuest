@@ -149,6 +149,10 @@ data class AppState(
     /** The IGDB access token those bought, and when it runs out (milliseconds). */
     val igdbToken: String = "",
     val igdbTokenExpires: Long = 0,
+    /** Remind the day before a game wishlisted from the Upcoming tab comes out. */
+    val releaseReminders: Boolean = true,
+    /** Those games, with the release dates known when they were added. */
+    val releaseWatch: List<ReleaseWatch> = emptyList(),
 )
 
 /** One completion from your imported HowLongToBeat history. */

@@ -4,6 +4,8 @@
 
     <!-- Downloads your data file and looks up game details. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Release reminders (asked for when you turn them on, on Android 13 and later). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Lists your installed games and emulators so you can choose how to start a game. -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"

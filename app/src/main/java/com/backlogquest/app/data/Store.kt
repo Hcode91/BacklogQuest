@@ -57,6 +57,7 @@ object Store {
         o.put("itadKey", s.itadKey)
         o.put("igdbClientId", s.igdbClientId).put("igdbSecret", s.igdbSecret)
         o.put("igdbToken", s.igdbToken).put("igdbTokenExpires", s.igdbTokenExpires)
+        o.put("releaseReminders", s.releaseReminders).put("releaseWatch", releaseWatchTo(s.releaseWatch))
         o.put("steamKey", s.steamKey)
         o.put("steamProfile", s.steamProfile)
         o.put("achTotals", JSONObject().apply { s.achTotals.forEach { (k, v) -> put(k, v) } })
@@ -113,6 +114,8 @@ object Store {
                 igdbSecret = o.str("igdbSecret"),
                 igdbToken = o.str("igdbToken"),
                 igdbTokenExpires = o.optLong("igdbTokenExpires", 0),
+                releaseReminders = o.optBoolean("releaseReminders", true),
+                releaseWatch = releaseWatchFrom(o.optJSONArray("releaseWatch")),
                 steamKey = o.str("steamKey"),
                 steamProfile = o.str("steamProfile"),
                 achTotals = o.optJSONObject("achTotals")?.let { a ->
