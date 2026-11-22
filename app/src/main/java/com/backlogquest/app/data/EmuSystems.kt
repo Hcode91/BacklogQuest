@@ -199,7 +199,10 @@ object EmuSystems {
             listOf("Recompiles a PS2 game's code ahead of time instead of emulating it as it runs."),
         ),
         Info("pockettrophy", listOf("PocketTrophy"), listOf("com.hcode91.pockettrophy"), "Sony PlayStation 3", listOf("ARMSX3 with custom trophies.")),
-        Info("pocketpager", listOf("PocketPager"), listOf("com.hcode91.pocketpager"), "RIM 850, 857, 950 and 957 two-way pagers"),
+        Info(
+            "pocketpager", listOf("PocketPager"), listOf("com.hcode91.pocketpager"), "RIM two-way pagers and the BlackBerry Bold 9000",
+            listOf("RIM 850, 857, 950 and 957 pagers (hardware emulation)", "BlackBerry Bold 9000 with OS 5.0 (RIM's Java OS on its own VM)"),
+        ),
         Info("pocketcentury", listOf("PocketCentury"), listOf("com.hcode91.pocketcentury"), "100-in-1 Retro Gaming Console (SY-909)"),
         Info("pocketcarioca", listOf("PocketCarioca", "Zeebx"), listOf("com.hcode91.pocketcarioca", "io.github.zeebxteam.zeebx"), "Zeebo"),
         Info("pocketchroma", listOf("PocketChroma"), listOf("com.hcode91.pocketchroma"), "M&D Monon Color"),

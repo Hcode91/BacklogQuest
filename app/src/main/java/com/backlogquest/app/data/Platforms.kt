@@ -194,6 +194,7 @@ object Platforms {
             "Symbian phones" to listOf("EKA2L1"),
             "Java phone games" to listOf("J2ME Loader", "EKA2L1"),
             "RIM pagers (850 / 857 / 950 / 957)" to listOf("PocketPager"),
+            "BlackBerry Bold 9000 (OS 5)" to listOf("PocketPager"),
         ),
         group(
             "Handhelds",

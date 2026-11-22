@@ -211,8 +211,11 @@ object Emulators {
         ) { i, l, _ -> pocket(i, null, l.gameId) },
         Emulator("pocketcentury", "PocketCentury", listOf("com.hcode91.pocketcentury/*"), EmuInput.NONE, listOf("100-in-1", "sy-909"))
             { i, _, _ -> pocket(i, null, "") },
-        Emulator("pocketpager", "PocketPager", listOf("com.hcode91.pocketpager/*"), EmuInput.NONE, listOf("rim", "pager"))
-            { i, _, _ -> pocket(i, null, "") },
+        // Bold 9000 games start by name; with no name it opens the RIM pagers.
+        Emulator(
+            "pocketpager", "PocketPager", listOf("com.hcode91.pocketpager/*"), EmuInput.ID, listOf("rim", "pager", "blackberry"),
+            idHint = "Bold 9000 game, e.g. BrickBreaker (leave empty for the RIM pagers)",
+        ) { i, l, _ -> pocket(i, null, l.gameId) },
         Emulator("swfpocket", "SWF Pocket", listOf("dev.swfpocket/*"), EmuInput.FILE, listOf("flash", "swf"))
             { i, _, uri -> pocket(i, uri, "") },
         Emulator(
