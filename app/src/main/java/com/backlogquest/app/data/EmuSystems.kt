@@ -188,7 +188,7 @@ object EmuSystems {
                 "Consoles: Radofin 1292 / 1392 APVS (VC 4000 family), Entex Adventure Vision, APF M-1000 / MP1000, Bally Astrocade (Professional Arcade, Home Library Computer), ColecoVision carts (through the Adam)",
                 "Virtual pets and tabletops: Egg Pet (Generation 1, Angel, Ocean), Chibi Pachi: Alien Fever, Coleco Alien Attack, Tomy Alien Chase, Playskool Alphie, Coleco Amaze-A-Tron, Milton Bradley Arcade Mania, Bambino Basketball; LED and LCD games: Tandy Arrange Ball, Parker Brothers Bank Shot, Epoch Astro Command, Elektronika Ataka Asteroidov and Autoslalom, Mattel Auto Race",
                 "Chess computers: Mephisto Academy, Almeria and Amsterdam, ARB V2 Sargon 4.0, Novag Accord, Fidelity Voice Chess Challenger and Advanced Voice Chess Challenger, Elektor AVR-Max and ATM18 Mini Chess Computer; Fidelity Backgammon Challenger",
-                "Computers: Atari 400 / 800 / XL / XE, Coleco Adam, Acorn Archimedes, A7000 and System 1, AIM 65, Altair 8800, TM 990/189, AT&T UNIX PC, NGEN CP-001",
+                "Computers: Atari 400 / 800 / XL / XE, Coleco Adam, Acorn Archimedes, A7000 and System 1, AIM 65, Altair 8800, TM 990/189, AT&T UNIX PC, NGEN CP-001; Bandai children's laptops: Anpanman PC, Anpanman Color PC Smart, Disney Wonderful Dream PC, Disney Wonderful Sweet PC, Doraemon PC",
                 "Gadgets: 4004 Nixie Clock",
             ),
         ),
