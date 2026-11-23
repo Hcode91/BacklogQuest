@@ -270,6 +270,7 @@ object Platforms {
             "Bandai Issho ni Henshin!" to listOf(PP),
             "Bandai Tamagotchi School Senshuken" to listOf(PP),
             "Bandai Narikiri Fight" to listOf(PP),
+            "Bandai Mission Start (Boukenger)" to listOf(PP),
             "Bambino Basketball (tabletop)" to listOf(PP),
             "Fidelity Backgammon Challenger" to listOf(PP),
             "Elektor ATM18 Mini Chess Computer" to listOf(PP),
