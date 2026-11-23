@@ -1,0 +1,29 @@
+# One-off: points each old build tag at its cleaned (rewritten) commit so
+# releases and their APKs stay. Safe to delete after it has run once.
+name: Retag cleaned commits (one-off)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Move tags to cleaned commits
+        run: |
+          specs=()
+          while read -r tag sha; do
+            [ -z "$tag" ] && continue
+            git cat-file -e "$sha^{commit}" || { echo "Missing commit $sha for $tag"; exit 1; }
+            specs+=("+$sha:refs/tags/$tag")
+          done < .github/retag-map.txt
+          echo "Moving ${#specs[@]} tags"
+          git push --force origin "${specs[@]}"
+      - name: Show result
+        run: git ls-remote --tags origin
