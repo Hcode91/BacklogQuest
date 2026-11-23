@@ -29,7 +29,7 @@ object Platforms {
         "AtGames 20 Master System & Game Gear Classics" to "atgsms",
         "AtGames 40 Bonus Games in 1" to "atgame40",
         "Millennium Arcade Genius" to "arcadege",
-        "Gizmondo" to "gizmondo",
+        "Gizmondo" to "gizgame",
         "Retro Dance Mat" to "110dance",
         "168-in-1 Game Phone Case" to "168pcase",
         "36-in-1 Classic Games Phone Case" to "36pcase",
