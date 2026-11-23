@@ -586,6 +586,7 @@ fun EditSheet(vm: BacklogViewModel, target: EditTarget, onDismiss: () -> Unit) {
         LaunchSetupDialog(
             current = launch,
             platform = platform.ifBlank { deviceName(vm.state, device) },
+            title = title,
             onSave = { l ->
                 launch = l
                 settingUpLaunch = false

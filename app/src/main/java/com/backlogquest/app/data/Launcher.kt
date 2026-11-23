@@ -209,6 +209,10 @@ object Emulators {
             "pocketouya", "PocketMicro", listOf("com.hcode91.pocketmicro/*"), EmuInput.ID, listOf("ouya", "windows phone"),
             idHint = "The game's name or package in PocketMicro's library",
         ) { i, l, _ -> pocket(i, null, l.gameId) },
+        Emulator(
+            "pocketpear", "PocketPear", listOf("com.hcode91.pocketpear/*"), EmuInput.ID, listOf("ios", "iphone", "ipod"),
+            idHint = "The game's name in PocketPear's list (or its bundle ID)",
+        ) { i, l, _ -> pocket(i, null, l.gameId) },
         Emulator("pocketcentury", "PocketCentury", listOf("com.hcode91.pocketcentury/*"), EmuInput.NONE, listOf("100-in-1", "sy-909"))
             { i, _, _ -> pocket(i, null, "") },
         // Bold 9000 games start by name; with no name it opens the RIM pagers.

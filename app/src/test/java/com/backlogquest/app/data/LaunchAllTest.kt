@@ -14,7 +14,7 @@ class LaunchAllTest {
     @Test fun everyEmulatorOnThePhoneHasALaunchEntryOrIsKnown() {
         // Your Pocket emulators and the forks all have launch entries.
         listOf("pocketplug", "pocketchroma", "pocketpenguin", "pocketsprout", "pocketreel", "pocketcarioca",
-            "pocketouya", "pocketcentury", "pocketpager", "pocketr5900", "pockettrophy", "gamenative", "rpcsx")
+            "pocketouya", "pocketcentury", "pocketpager", "pocketr5900", "pockettrophy", "pocketpear", "gamenative", "rpcsx")
             .forEach { assertTrue(it, Emulators.byKey(it) != null) }
     }
 

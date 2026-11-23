@@ -47,7 +47,7 @@ import com.backlogquest.app.data.EmuSystems
 import com.backlogquest.app.data.fmtNum
 
 /** Emulators that look games up by the name you type, kept as typed (title IDs are upper case). */
-private val NAMED_GAMES = setOf("pocketplug", "pocketpenguin", "pocketreel", "pocketcarioca", "pocketouya", "rpgpocket")
+private val NAMED_GAMES = setOf("pocketplug", "pocketpenguin", "pocketreel", "pocketcarioca", "pocketouya", "rpgpocket", "pocketpear")
 
 /** Your own apps that answer BacklogQuest's launch request in their latest builds. */
 private val YOUR_APPS = setOf(
@@ -83,6 +83,7 @@ fun fileName(ctx: android.content.Context, uri: Uri): String = try {
 fun LaunchSetupDialog(
     current: Launch?,
     platform: String,
+    title: String = "",
     onSave: (Launch?) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -96,6 +97,8 @@ fun LaunchSetupDialog(
     // PocketPlug: fill in the machine's set name from the game's platform.
     LaunchedEffect(emu) {
         if (emu == "pocketplug" && gameId.isBlank()) gameId = com.backlogquest.app.data.Platforms.pocketPlugSets[platform].orEmpty()
+        // PocketPear finds the game by name, so the tile's own title is the right start
+        if (emu == "pocketpear" && gameId.isBlank()) gameId = title
     }
     var core by remember { mutableStateOf(current?.core?.takeIf { it.isNotBlank() } ?: Emulators.coreFor(platform)) }
     var pkg by remember { mutableStateOf(if (current?.mode == "app") current?.pkg.orEmpty() else "") }
