@@ -79,6 +79,7 @@ object Platforms {
         "Bandai Issho ni Henshin!" to "ban_pr2j",
         "Bandai Tamagotchi School Senshuken" to "ban_tam2",
         "Bandai Narikiri Fight" to "ban_ult",
+        "Bandai Mission Start (Boukenger)" to "ban_bkgj",
         "Bambino Basketball (tabletop)" to "bambball",
         "Fidelity Backgammon Challenger" to "backgamc",
         "Elektor ATM18 Mini Chess Computer" to "atm18mcc",
