@@ -53,6 +53,7 @@ object Platforms {
         "Millennium Arcade Genius" to "arcadege",
         "Gizmondo" to "gizgame",
         "Tapwave Zodiac" to "zodiac",
+        "Mattel HyperScan" to "hyperscan",
         "Retro Dance Mat" to "110dance",
         "168-in-1 Game Phone Case" to "168pcase",
         "36-in-1 Classic Games Phone Case" to "36pcase",
@@ -244,6 +245,7 @@ object Platforms {
             "Entex Adventure Vision" to listOf(PP),
             "APF M-1000 / MP1000" to listOf(PP),
             "Bally Astrocade" to listOf(PP),
+            "Mattel HyperScan" to listOf(PP),
         ),
         group(
             "Phones",
