@@ -52,6 +52,7 @@ object Platforms {
         "AtGames 40 Bonus Games in 1" to "atgame40",
         "Millennium Arcade Genius" to "arcadege",
         "Gizmondo" to "gizgame",
+        "Tapwave Zodiac" to "zodiac",
         "Retro Dance Mat" to "110dance",
         "168-in-1 Game Phone Case" to "168pcase",
         "36-in-1 Classic Games Phone Case" to "36pcase",
@@ -260,6 +261,7 @@ object Platforms {
             "LeapFrog Didj" to listOf("PocketSprout"),
             "M&D Monon Color" to listOf("PocketChroma"),
             "Gizmondo" to listOf(PP),
+            "Tapwave Zodiac" to listOf(PP),
             "VideoNow discs" to listOf("PocketReel"),
         ),
         group(
