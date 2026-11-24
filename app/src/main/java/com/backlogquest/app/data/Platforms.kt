@@ -55,6 +55,7 @@ object Platforms {
         "Tapwave Zodiac" to "zodiac",
         "Mattel HyperScan" to "hyperscan",
         "Bandai Playdia" to "playdia",
+        "ZAPiT Game Wave" to "gamewave",
         "Retro Dance Mat" to "110dance",
         "168-in-1 Game Phone Case" to "168pcase",
         "36-in-1 Classic Games Phone Case" to "36pcase",
@@ -248,6 +249,7 @@ object Platforms {
             "Bally Astrocade" to listOf(PP),
             "Mattel HyperScan" to listOf(PP),
             "Bandai Playdia" to listOf(PP),
+            "ZAPiT Game Wave" to listOf(PP),
         ),
         group(
             "Phones",
