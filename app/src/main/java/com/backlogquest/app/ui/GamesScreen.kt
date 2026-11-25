@@ -444,7 +444,9 @@ private fun BulkPanel(vm: BacklogViewModel, tab: String, rows: List<LibItem>) {
                         if (tab != "wishlist" && g.achievements.isEmpty()) {
                             val key = BulkFetch.achKey(g.id)
                             if (key in st.notFound) triedKeys += key
-                            else if (Achievements.pickSource(g, deviceName(st, g.device)) != null) achievements += g.id
+                            else if (Achievements.pickSource(g, deviceName(st, g.device))
+                                    ?.let { it != Achievements.EXO || st.exophaseUser.isNotBlank() } == true
+                            ) achievements += g.id
                         }
                         if (wantPrices && st.prices[normTitle(g.title)] == null) {
                             val key = BulkFetch.priceKey(g.title)

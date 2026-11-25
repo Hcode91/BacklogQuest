@@ -526,8 +526,11 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
                         update { it.copy(notFound = it.notFound + BulkFetch.achKey(id)) }
                         continue
                     }
+                    // Google Play games wait until there's an Exophase username to look them up with.
+                    if (source == Achievements.EXO && state.exophaseUser.isBlank()) continue
                     try {
-                        val list = withinLimit(45_000) {
+                        // Exophase reads your whole game list the first time, which takes longer.
+                        val list = withinLimit(if (source == Achievements.EXO) 120_000 else 45_000) {
                             Achievements.find(getApplication(), source, g.title, g.platform.ifBlank { device }, state).list
                         } ?: throw java.io.IOException("No answer in time")
                         failedInARow = 0
@@ -792,8 +795,9 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
         val steam = AchievementTotals.canReadSteam(s)
         val retro = AchievementTotals.canReadRetro(s)
         val psn = AchievementTotals.canReadPsn(s)
-        if (!steam && !retro && !psn) {
-            if (!quiet) achMessage = "Add your Steam, RetroAchievements or PSN details in Setup → Achievements first."
+        val exo = AchievementTotals.canReadExophase(s)
+        if (!steam && !retro && !psn && !exo) {
+            if (!quiet) achMessage = "Add your Steam, RetroAchievements, PSN or Exophase details in Setup → Achievements first."
             return
         }
         achBusy = true
@@ -817,6 +821,15 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
                     problems += e.message ?: "PlayStation trophies couldn't be read."
                 } catch (e: Exception) {
                     problems += "PlayStation trophies couldn't be read."
+                }
+            }
+            if (exo) {
+                try {
+                    found[Achievements.EXO] = Exophase.total(getApplication(), s)
+                } catch (e: Achievements.AchError) {
+                    problems += e.message ?: "Google Play achievements couldn't be read from Exophase."
+                } catch (e: Exception) {
+                    problems += "Google Play achievements couldn't be read from Exophase."
                 }
             }
             if (steam) {

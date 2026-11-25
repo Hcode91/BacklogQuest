@@ -19,7 +19,7 @@ The app downloads `backlog-data.json` from this repo (the root of the `main` bra
 - **Profile**: stats and the trophy room.
 - **Setup**: a grid of tiles; tap one to open that part.
 
-The status panel's achievements figure is everything you've earned: your whole Steam and RetroAchievements accounts and your PlayStation trophy total (with the details from **Setup → Achievements**), plus Xbox achievements you've ticked on games in the app. The PlayStation figure is read from your public PSNProfiles page using just your PSN ID, so it shows what that site last recorded; update your profile there after earning trophies. The accounts are re-read once a day when the app opens, or with **Recount** in Profile. Steam only answers one game at a time, so the first count can take a minute; after that only games you've played since are re-checked.
+The status panel's achievements figure is everything you've earned: your whole Steam and RetroAchievements accounts and your PlayStation trophy total (with the details from **Setup → Achievements**), plus Xbox achievements you've ticked on games in the app. The PlayStation figure is read from your public PSNProfiles page using just your PSN ID, so it shows what that site last recorded; update your profile there after earning trophies. Google Play achievements come from your public Exophase profile (add your Exophase username): link Google Play on exophase.com and keep your Play Games profile public; Exophase only picks up games you've played recently. The accounts are re-read once a day when the app opens, or with **Recount** in Profile. Steam only answers one game at a time, so the first count can take a minute; after that only games you've played since are re-checked.
 
 ## Importing CSV lists into the wishlist
 
@@ -90,7 +90,7 @@ Every imported list (CSV or web) has a **source**, such as "MobyGames". The impo
 Every tab in **Games** has a **Fetch for this list** panel. Choose how many (first 10, 25, 50, 100 or all) and it fills in the first games in the list, as currently sorted, filtered and searched, that are missing:
 
 - **Pictures**: your games and completed games (history included) get box art from HowLongToBeat, or RAWG if you've added a key. Imported wishlist games use their own link; other wishlist games are looked up by title.
-- **Achievements** (Backlog, Playing, Beaten, Dropped): from Steam, RetroAchievements, PSNProfiles or TrueAchievements, chosen by platform, as in a game's own Auto-fill.
+- **Achievements** (Backlog, Playing, Beaten, Dropped): from Steam, RetroAchievements, PSNProfiles, TrueAchievements or Exophase (Android / Google Play games), chosen by platform, as in a game's own Auto-fill.
 - **Prices** (Wishlist, with an IsThereAnyDeal key).
 
 Games are done one at a time with a short pause, each with a time limit, and the batch stops if a site stops answering three times in a row. Games tried before without a result are skipped next time, so the next press moves on; **Try them again** clears that. The wishlist can also be sorted by **Platform**.

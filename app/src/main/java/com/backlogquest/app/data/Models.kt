@@ -139,7 +139,9 @@ data class AppState(
     val notFound: Set<String> = emptySet(),
     /** Your PSN ID, for reading your trophy total from your public PSNProfiles page. */
     val psnId: String = "",
-    /** Achievements earned across a whole account, by source ("Steam", "RetroAchievements", "PSNProfiles"). */
+    /** Your Exophase username, for Google Play achievements (Exophase reads your public Play Games profile). */
+    val exophaseUser: String = "",
+    /** Achievements earned across a whole account, by source ("Steam", "RetroAchievements", "PSNProfiles", "Exophase"). */
     val achTotals: Map<String, Int> = emptyMap(),
     /** The day those account totals were last fetched. */
     val achTotalsAt: String = "",

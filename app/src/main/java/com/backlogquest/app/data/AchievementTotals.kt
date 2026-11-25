@@ -39,6 +39,7 @@ object AchievementTotals {
             AchPart("RetroAchievements", "RA", s.achTotals[Achievements.RA] ?: ticked(Achievements.RA), Achievements.RA in s.achTotals),
             AchPart("PlayStation", "PSN", s.achTotals[Achievements.PSN] ?: ticked(Achievements.PSN), Achievements.PSN in s.achTotals),
             AchPart("Xbox", "Xbox", ticked(Achievements.XBOX), false),
+            AchPart("Google Play", "Play", s.achTotals[Achievements.EXO] ?: ticked(Achievements.EXO), Achievements.EXO in s.achTotals),
         )
         return AchSummary(parts.filter { it.count > 0 || it.wholeAccount })
     }
@@ -46,6 +47,7 @@ object AchievementTotals {
     fun canReadSteam(s: AppState) = s.steamKey.isNotBlank() && s.steamProfile.isNotBlank()
     fun canReadRetro(s: AppState) = s.raKey.isNotBlank() && s.raUser.isNotBlank()
     fun canReadPsn(s: AppState) = s.psnId.isNotBlank()
+    fun canReadExophase(s: AppState) = s.exophaseUser.isNotBlank()
 
     // ---------------- PlayStation (PSNProfiles) ----------------
 

@@ -70,6 +70,7 @@ fun SetupScreen(vm: BacklogViewModel) {
     var steamKeyText by remember { mutableStateOf(s.steamKey) }
     var steamProfileText by remember { mutableStateOf(s.steamProfile) }
     var psnText by remember { mutableStateOf(s.psnId) }
+    var exoText by remember { mutableStateOf(s.exophaseUser) }
     val context = androidx.compose.ui.platform.LocalContext.current
     var igdbIdText by remember { mutableStateOf(s.igdbClientId) }
     val askNotify = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -298,6 +299,19 @@ fun SetupScreen(vm: BacklogViewModel) {
                     value = psnText,
                     onValueChange = { t -> psnText = t; vm.update { it.copy(psnId = t.trim()) } },
                     label = { Text("PSN ID (optional)") },
+                    singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
+                )
+                Hint(
+                    "Google Play: add your Exophase username and Android games get their achievement lists, " +
+                        "with your unlocks ticked, from your public Exophase profile. Link Google Play on " +
+                        "exophase.com first, and keep your Play Games profile public (Play Games → Settings → " +
+                        "Play Games profile → Public). Exophase only notices games you've played recently, so " +
+                        "open a game once if it's missing.",
+                )
+                OutlinedTextField(
+                    value = exoText,
+                    onValueChange = { t -> exoText = t; vm.update { it.copy(exophaseUser = t.trim()) } },
+                    label = { Text("Exophase username or profile link (optional)") },
                     singleLine = true, colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
                 )
             }

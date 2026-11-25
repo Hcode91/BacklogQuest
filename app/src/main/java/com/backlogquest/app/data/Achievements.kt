@@ -14,13 +14,15 @@ import org.json.JSONObject
  * - RetroAchievements: the official RA web API (needs your username + API key).
  * - PlayStation: PSNProfiles; Xbox: TrueAchievements. These two only work in a
  *   real browser, so they're read with an invisible one ([PageReader]).
+ * - Google Play: your public Exophase profile ([Exophase]), also through that browser.
  */
 object Achievements {
     const val STEAM = "Steam"
     const val RA = "RetroAchievements"
     const val PSN = "PSNProfiles"
     const val XBOX = "TrueAchievements"
-    val SOURCES = listOf(STEAM, RA, PSN, XBOX)
+    const val EXO = "Exophase"
+    val SOURCES = listOf(STEAM, RA, PSN, XBOX, EXO)
 
     class Found(val title: String, val list: List<Trophy>)
     class AchError(message: String) : Exception(message)
@@ -32,6 +34,7 @@ object Achievements {
             g.source.equals("Steam", true) || p.contains("steam") -> STEAM
             Regex("ps3|ps4|ps5|vita|playstation ?[345]").containsMatchIn(p) -> PSN
             p.contains("xbox") -> XBOX
+            p.contains("android") || p.contains("google play") || g.source.equals("Google Play", true) -> EXO
             raAlias(p) != null -> RA
             p == "pc" || p.contains("windows") || Regex("\\bpc\\b").containsMatchIn(p) -> STEAM
             else -> null
@@ -44,6 +47,7 @@ object Achievements {
             RA -> retro(title, platform, s)
             PSN -> psnProfiles(ctx, title, platform)
             XBOX -> trueAchievements(ctx, title, TA_SITE)
+            EXO -> Exophase.find(ctx, title, s)
             else -> throw AchError("Unknown source.")
         }
 
