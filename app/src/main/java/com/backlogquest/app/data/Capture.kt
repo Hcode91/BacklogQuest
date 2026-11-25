@@ -32,6 +32,13 @@ object Capture {
     fun intervalSeconds(c: Context): Int = sp(c).getInt("interval", DEFAULT_INTERVAL).coerceAtLeast(MIN_INTERVAL)
     fun setIntervalSeconds(c: Context, s: Int) = sp(c).edit().putInt("interval", s.coerceAtLeast(MIN_INTERVAL)).apply()
 
+    /** What happened to the latest screenshot, shown in Setup → Screenshots. */
+    fun lastResult(c: Context): String = sp(c).getString("last", null).orEmpty()
+    fun setLastResult(c: Context, text: String) {
+        val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.UK).format(java.util.Date())
+        sp(c).edit().putString("last", "$time  $text").apply()
+    }
+
     /** The game being played: the package to watch and the title to name shots after. */
     class Session(val pkg: String, val title: String)
 

@@ -21,7 +21,7 @@ import android.provider.MediaStore
 import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
-import android.view.inputmethod.InputMethodManager
+import android.view.accessibility.AccessibilityWindowInfo
 import com.backlogquest.app.data.Capture
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -40,103 +40,125 @@ class CaptureService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var io: ExecutorService
 
-    private var capturing = false
+    /** True while the game started from Backlog Quest is the app on screen. */
+    private var inGame = false
     private var title = ""
     private var shotCount = 0
-    private var shotsPkg: String? = null
+    private var shotsKey: String? = null
     private var leftGameAt = 0L
-    private var ignoredPackages: Set<String> = emptySet()
+    private var lastProblem: String? = null
 
-    private val tick = object : Runnable {
+    /**
+     * Runs on its own timer rather than relying on window events: overlays from other apps
+     * (Game Booster, floating controls, toasts) send events too, and used to make it think
+     * you'd left the game. Each pass checks which app is really on screen.
+     */
+    private val loop = object : Runnable {
         override fun run() {
-            capture()
-            handler.postDelayed(this, Capture.intervalSeconds(this@CaptureService) * 1000L)
+            handler.removeCallbacks(this)
+            handler.postDelayed(this, pass())
         }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         io = Executors.newSingleThreadExecutor()
-        refreshIgnored()
         createChannel()
+        handler.post(loop)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        // Only used to notice a game starting straight away; the loop does the rest.
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        val pkg = event.packageName?.toString() ?: return
-
-        // Keyboards, the notification shade and system pop-ups appear over games:
-        // they don't count as leaving the game.
-        if (pkg in ignoredPackages) return
-
-        val session = Capture.session(this)
-        val wanted = Capture.supported && Capture.enabled(this) && session != null && pkg == session.pkg
-        if (wanted) {
-            val now = System.currentTimeMillis()
-            if (!capturing && leftGameAt > 0 && now - leftGameAt > Capture.STALE_AFTER_MS) {
-                // Away for ages without going back to Backlog Quest: treat the session as over,
-                // so opening the emulator on its own later isn't named after the old game.
-                Capture.end(this)
-                leftGameAt = 0
-                return
-            }
-            leftGameAt = 0
-            if (!capturing) start(session!!)
-        } else {
-            if (capturing) {
-                stop()
-                leftGameAt = System.currentTimeMillis()
-            }
+        if (!inGame && Capture.session(this)?.pkg == event.packageName?.toString()) {
+            handler.removeCallbacks(loop)
+            handler.post(loop)
         }
     }
 
     override fun onInterrupt() {}
 
     override fun onDestroy() {
-        stop()
+        handler.removeCallbacks(loop)
+        leaveGame()
         if (::io.isInitialized) io.shutdown()
         super.onDestroy()
     }
 
-    private fun refreshIgnored() {
-        val imes = try {
-            getSystemService(InputMethodManager::class.java).enabledInputMethodList.map { it.packageName }
-        } catch (e: Exception) {
-            emptyList()
+    /** One check (and maybe one screenshot). Returns how long to wait before the next pass. */
+    private fun pass(): Long {
+        val session = Capture.session(this)
+        if (!Capture.supported || !Capture.enabled(this) || session == null) {
+            leaveGame()
+            leftGameAt = 0
+            return IDLE_CHECK_MS
         }
-        ignoredPackages = (imes + listOf("com.android.systemui", "android")).toSet()
+        val onScreen = topAppPackage()
+        val now = System.currentTimeMillis()
+        if (onScreen == null) {
+            // Couldn't tell (e.g. screen off): keep going as before.
+            if (inGame) capture(session.title)
+            return if (inGame) intervalMs() else AWAY_CHECK_MS
+        }
+        if (onScreen != session.pkg) {
+            if (inGame) {
+                leaveGame()
+                leftGameAt = now
+            } else if (leftGameAt > 0 && now - leftGameAt > Capture.STALE_AFTER_MS) {
+                // Away for ages without coming back to Backlog Quest: the session is over, so
+                // opening the emulator by itself later isn't named after the old game.
+                Capture.end(this)
+                leftGameAt = 0
+            }
+            return AWAY_CHECK_MS
+        }
+        leftGameAt = 0
+        if (!inGame) {
+            enterGame(session)
+            return FIRST_SHOT_DELAY_MS // give the game a moment to draw
+        }
+        capture(session.title)
+        return intervalMs()
     }
 
-    private fun start(session: Capture.Session) {
-        handler.removeCallbacks(tick)
-        refreshIgnored()
-        capturing = true
+    private fun intervalMs() = Capture.intervalSeconds(this) * 1000L
+
+    /**
+     * The app whose window is on top, ignoring keyboards, the notification shade and other
+     * apps' floating overlays (those aren't application windows). Null if it can't be read.
+     */
+    private fun topAppPackage(): String? = try {
+        val apps = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+        val top = apps.maxByOrNull { it.layer }
+        top?.root?.packageName?.toString()
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun enterGame(session: Capture.Session) {
+        inGame = true
         title = session.title
-        if (shotsPkg != session.pkg + session.title) {
-            shotsPkg = session.pkg + session.title
+        val key = session.pkg + "|" + session.title
+        if (shotsKey != key) {
+            shotsKey = key
             shotCount = 0
+            lastProblem = null
         }
-        Log.i(TAG, "Capturing ${session.title} (${session.pkg})")
+        Log.i(TAG, "In game: ${session.title} (${session.pkg})")
         updateNotification()
-        // Give the game a moment to draw before the first shot.
-        handler.postDelayed(tick, FIRST_SHOT_DELAY_MS)
     }
 
-    private fun stop() {
-        handler.removeCallbacks(tick)
-        capturing = false
+    private fun leaveGame() {
+        if (!inGame) return
+        inGame = false
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
     }
 
-    private fun capture() {
-        if (!capturing || !Capture.supported) return
-        if (!Capture.enabled(this) || Capture.session(this) == null) { stop(); return }
-
+    private fun capture(gameTitle: String) {
         // Skip while the screen is off or locked.
         if (!getSystemService(PowerManager::class.java).isInteractive) return
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) return
 
-        val name = title
         takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
             override fun onSuccess(result: ScreenshotResult) {
                 val hw = result.hardwareBuffer
@@ -146,18 +168,47 @@ class CaptureService : AccessibilityService() {
                 } finally {
                     hw.close()
                 }
-                if (bitmap == null) return
+                if (bitmap == null) {
+                    report("couldn't read the screenshot")
+                    return
+                }
                 io.execute {
-                    if (save(bitmap, name)) handler.post { shotCount++; updateNotification() }
+                    val ok = save(bitmap, gameTitle)
                     bitmap.recycle()
+                    handler.post {
+                        if (ok) {
+                            shotCount++
+                            lastProblem = null
+                            Capture.setLastResult(this@CaptureService, "Saved shot $shotCount of $gameTitle")
+                            updateNotification()
+                        } else {
+                            report("couldn't save to Pictures")
+                        }
+                    }
                 }
             }
 
             override fun onFailure(errorCode: Int) {
-                // e.g. the game blocks screenshots
-                Log.w(TAG, "Screenshot failed, code $errorCode")
+                report(failureText(errorCode))
             }
         })
+    }
+
+    private fun report(problem: String) {
+        Log.w(TAG, "Screenshot failed: $problem")
+        lastProblem = problem
+        Capture.setLastResult(this, "Last shot failed: $problem")
+        updateNotification()
+    }
+
+    private fun failureText(code: Int) = when (code) {
+        1 -> "Android refused it (internal error, code 1)"
+        2 -> "no permission, switch the service off and on again (code 2)"
+        3 -> "too soon after the last one (code 3)"
+        4 -> "screen not available (code 4)"
+        5 -> "the game blocks screenshots (code 5)"
+        6 -> "window not available (code 6)"
+        else -> "error code $code"
     }
 
     private fun save(bitmap: Bitmap, gameTitle: String): Boolean {
@@ -194,7 +245,7 @@ class CaptureService : AccessibilityService() {
     }
 
     private fun updateNotification() {
-        if (!capturing) return
+        if (!inGame) return
         val open = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
@@ -203,7 +254,10 @@ class CaptureService : AccessibilityService() {
         val n = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Screenshots: $title")
-            .setContentText("Every ${Capture.intervalSeconds(this)}s · $shotCount saved")
+            .setContentText(
+                "Every ${Capture.intervalSeconds(this)}s · $shotCount saved" +
+                    (lastProblem?.let { " · last try failed: $it" } ?: ""),
+            )
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
@@ -218,6 +272,8 @@ class CaptureService : AccessibilityService() {
         private const val CHANNEL_ID = "capturing"
         private const val NOTIFICATION_ID = 4201
         private const val FIRST_SHOT_DELAY_MS = 2000L
+        private const val IDLE_CHECK_MS = 5000L
+        private const val AWAY_CHECK_MS = 2000L
         private const val JPEG_QUALITY = 90
     }
 }

@@ -315,10 +315,15 @@ fun SetupScreen(vm: BacklogViewModel) {
                         )
                         PixelButton("APP INFO") { ctx.startActivity(cap.appInfoIntent(ctx)) }
                     }
+                    var last by remember { mutableStateOf(cap.lastResult(ctx)) }
+                    if (last.isNotBlank()) {
+                        Text(last, color = if ("failed" in last) BQ.B else BQ.Muted, fontSize = 13.sp)
+                    }
                     androidx.compose.runtime.LaunchedEffect(Unit) {
                         while (true) {
                             kotlinx.coroutines.delay(2000)
                             service = cap.serviceOn(ctx)
+                            last = cap.lastResult(ctx)
                         }
                     }
                 }
