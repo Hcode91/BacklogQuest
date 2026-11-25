@@ -48,6 +48,7 @@ private val SETUP_TILES = listOf(
     Triple("count", "EXTRA COUNT", "Completions missing from your history"),
     Triple("autofill", "AUTO-FILL", "Box art, genre and length for new games"),
     Triple("playtime", "PLAY TIME", "Measure sessions and read hours from Steam"),
+    Triple("screenshots", "SCREENSHOTS", "Auto screenshots while you play, named after the game"),
     Triple("achievements", "ACHIEVEMENTS", "Steam, RetroAchievements and PSN details"),
     Triple("prices", "PRICES", "Wishlist prices from IsThereAnyDeal"),
     Triple("stores", "IMPORT FROM STORES", "Bring in your libraries"),
@@ -246,6 +247,86 @@ fun SetupScreen(vm: BacklogViewModel) {
                 }
                 Hint("Steam games: copy your hours from Steam (needs your Steam key and profile below).")
                 PixelButton("SYNC STEAM PLAY TIME", kind = BtnKind.B) { vm.syncSteamHours() }
+            }
+        }
+
+        if (open == "screenshots") item {
+            Panel {
+                SectionTitle("SCREENSHOTS")
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                val cap = com.backlogquest.app.data.Capture
+                var on by remember { mutableStateOf(cap.enabled(ctx)) }
+                var service by remember { mutableStateOf(cap.serviceOn(ctx)) }
+                var secsText by remember { mutableStateOf(cap.intervalSeconds(ctx).toString()) }
+                if (!cap.supported) {
+                    Hint("Screenshots need Android 11 or newer.")
+                } else {
+                    Hint(
+                        "When you start a game from Backlog Quest (the Play button or a home-screen icon), a " +
+                            "screenshot is saved every few seconds while the game is on screen. They go to " +
+                            "Pictures/BacklogQuest/<game>/ and are named after the game, so your gallery finds them. " +
+                            "Shots pause when you leave the game and stop when you come back to Backlog Quest.",
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Take screenshots while playing", color = BQ.Ink, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = on,
+                            onCheckedChange = { v ->
+                                on = v
+                                cap.setEnabled(ctx, v)
+                                if (v && android.os.Build.VERSION.SDK_INT >= 33) {
+                                    askNotify.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            },
+                            colors = SwitchDefaults.colors(checkedTrackColor = BQ.B, checkedThumbColor = BQ.Shell),
+                        )
+                    }
+                    OutlinedTextField(
+                        value = secsText,
+                        onValueChange = { text ->
+                            secsText = text.filter { it.isDigit() }.take(5)
+                            secsText.toIntOrNull()?.let { cap.setIntervalSeconds(ctx, it) }
+                        },
+                        label = { Text("Every how many seconds (${cap.MIN_INTERVAL} or more)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = bqFieldColors(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    val secs = secsText.toIntOrNull()
+                    if (secs != null && secs < cap.MIN_INTERVAL) {
+                        Hint("Shortest is ${cap.MIN_INTERVAL} seconds, so it'll use ${cap.MIN_INTERVAL}.")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            if (service) "✓ Screenshot service on" else "Screenshot service off",
+                            color = if (service) BQ.Ok else BQ.Muted, fontSize = 14.sp, modifier = Modifier.weight(1f),
+                        )
+                        if (!service) {
+                            PixelButton("TURN ON", kind = BtnKind.B) { ctx.startActivity(cap.accessibilityIntent()) }
+                        }
+                    }
+                    if (!service) {
+                        Hint(
+                            "In Accessibility, go to Installed apps → Backlog Quest screenshots and switch it on. " +
+                                "If it says \"Restricted setting\", open App info below, tap ⋮ (top right) → " +
+                                "Allow restricted settings, then try again. If you used the AppCapture app for your " +
+                                "games, untick them there so you don't get every shot twice.",
+                        )
+                        PixelButton("APP INFO") { ctx.startActivity(cap.appInfoIntent(ctx)) }
+                    }
+                    var last by remember { mutableStateOf(cap.lastResult(ctx)) }
+                    if (last.isNotBlank()) {
+                        Text(last, color = if ("failed" in last) BQ.B else BQ.Muted, fontSize = 13.sp)
+                    }
+                    androidx.compose.runtime.LaunchedEffect(Unit) {
+                        while (true) {
+                            kotlinx.coroutines.delay(2000)
+                            service = cap.serviceOn(ctx)
+                            last = cap.lastResult(ctx)
+                        }
+                    }
+                }
             }
         }
 

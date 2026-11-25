@@ -59,6 +59,12 @@ Your Pocket emulators are sent a `com.hcode91.pocket.LAUNCH_GAME` request (their
 
 Emulators that can't be told which game to start (RPCSX, and any other emulator the app recognises on your phone, such as 86BoxDroid, WinUAE, AppleWinDroid, Delta Touch, DroidDeck or GameHub) are listed under **Other emulators on this phone**: their tile opens the emulator, you pick the game there, and play time is still tracked.
 
+## Screenshots while you play
+
+Turn on **Setup → Screenshots** and every game you start from Backlog Quest (the Play button or a home-screen icon) gets a screenshot every few seconds while it's on screen; you choose how many seconds (5 or more, 30 by default). They're saved to `Pictures/BacklogQuest/<game>/<game>_yyyy-MM-dd_HH-mm-ss.jpg`, named after the game rather than the emulator, so your gallery finds them. Shots pause when you leave the game, and the session ends when you come back to Backlog Quest (or after 30 minutes away). A notification shows while it's capturing, with a count.
+
+It needs Android 11 or newer, and the **Backlog Quest screenshots** service switched on in Accessibility settings (the Setup panel has a button; sideloaded apps may first need **App info → ⋮ → Allow restricted settings**). This replaces the separate AppCapture app for games, so untick your emulators there to avoid double shots. Games that block screenshots are skipped.
+
 ## Platforms
 
 **Setup → Platforms** lists every system you play, so none get left out. It starts with all the systems your emulators cover (Nintendo, Sony, Sega, Atari, NEC/SNK, arcade, other consoles, computers and game engines), plus Android, Legacy Android, iOS, Windows Phone, Switch 2 and Windows PC, and everything your own Pocket emulators play (PocketPlug's plug-and-play games, LCD games, chess computers and vintage computers; Zeebo, GP2X, LeapFrog Didj, Monon Color, VideoNow, RIM pagers and more). Built-in platforms added in later versions join your list automatically, unless you'd removed them. Each one shows the emulators that play it and how many of your games are on it. Remove any you don't use, add your own, or add back the built-in ones you removed. When you type a game's platform, matching platforms from this list are offered.
