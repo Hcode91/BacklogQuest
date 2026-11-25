@@ -97,6 +97,8 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
         }
         try {
             val pkg = Launcher.start(getApplication(), l)
+            // Screenshots while you play (Setup → Screenshots), named after this game.
+            Capture.begin(getApplication(), pkg, g.title)
             sessionPrefs.edit()
                 .putString("game", gameId).putString("pkg", pkg).putLong("start", System.currentTimeMillis())
                 .apply()
@@ -115,6 +117,7 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
         val now = System.currentTimeMillis()
         if (now - start < 60_000) return // just bounced back; keep waiting
         sessionPrefs.edit().clear().apply()
+        Capture.end(getApplication())
         val measuredMs = PlayTime.foregroundMs(getApplication(), pkg, start, now)
         val ms = measuredMs ?: (now - start)
         val minutes = (ms / 60_000).toInt()

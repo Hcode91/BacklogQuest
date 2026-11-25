@@ -50,5 +50,18 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <!-- Optional (you turn it on in Setup → Screenshots): screenshots of games you start from here. -->
+        <service
+            android:name=".CaptureService"
+            android:exported="false"
+            android:label="@string/capture_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/capture_service" />
+        </service>
     </application>
 </manifest>
