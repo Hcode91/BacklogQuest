@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.backlogquest.app.data.BacklogViewModel
 import com.backlogquest.app.data.Game
+import com.backlogquest.app.data.WishItem
 import com.backlogquest.app.data.deviceName
 import com.backlogquest.app.data.fmtNum
 import com.backlogquest.app.data.playedOn
@@ -218,6 +219,34 @@ private fun PlatformPickSheet(vm: BacklogViewModel, platform: String, matcher: P
         vm.showToast("NOW PLAYING\n$title")
         onDismiss()
     }
+    fun playBacklog(g: Game) {
+        val keep = matcher.of(g, s) == platform
+        vm.update { st ->
+            st.copy(games = st.games.map { if (it.id == g.id) it.copy(status = "playing", platform = if (keep) it.platform else platform) else it })
+        }
+        done(g.title)
+    }
+    fun playWish(w: WishItem) {
+        val g = Game(
+            id = newId(), title = w.title, device = device, status = "playing",
+            platform = w.platforms.firstOrNull { matcher.of(it) == platform } ?: platform,
+            genre = w.genres.firstOrNull().orEmpty(), cover = vm.wishImage(w.id),
+            est = if (w.hours > 0) w.hours else 0.0,
+            estSource = if (w.hours > 0) "hltb" else "",
+            addedAt = today(), order = System.currentTimeMillis(),
+        )
+        vm.update { st -> st.copy(hiddenWish = st.hiddenWish + w.id, games = st.games + g) }
+        done(w.title)
+    }
+
+    // Random pick: from the backlog games showing (this platform, or everything / search),
+    // else from the wishlist ones. Shown as a suggestion first, so you can roll again.
+    var rolled by remember { mutableStateOf<Any?>(null) }
+    fun roll() {
+        val pool: List<Any> = backlog.ifEmpty { wishlist }
+        val choices = if (pool.size > 1) pool.filter { it != rolled } else pool
+        rolled = choices.randomOrNull()
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -243,18 +272,39 @@ private fun PlatformPickSheet(vm: BacklogViewModel, platform: String, matcher: P
                         label = { Text("Search") }, singleLine = true,
                         colors = bqFieldColors(), modifier = Modifier.fillMaxWidth(),
                     )
+                    if (backlog.isNotEmpty() || wishlist.isNotEmpty()) {
+                        PixelButton("RANDOM GAME", Modifier.fillMaxWidth(), kind = BtnKind.B) { roll() }
+                    }
+                    rolled?.let { r ->
+                        val title = (r as? Game)?.title ?: (r as WishItem).title
+                        val about = if (r is Game) "From your backlog · " + r.platform.ifBlank { deviceName(s, r.device) }
+                        else "From your wishlist · " + (r as WishItem).platforms.joinToString(", ")
+                        Column(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).border(1.dp, BQ.B, RoundedCornerShape(10.dp))
+                                .background(BQ.Shell).padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text("HOW ABOUT…", color = BQ.Muted, fontFamily = BQ.Mono, fontSize = 11.sp)
+                            Text(title, color = BQ.Ink, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                            Text(about, color = BQ.Muted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (r is WishItem) Hint("It'll be played on ${s.devices.firstOrNull { it.id == device }?.name ?: "your device"} (change it under From your wishlist).")
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                PixelButton("PLAY IT", Modifier.weight(1f), kind = BtnKind.A) {
+                                    if (r is Game) playBacklog(r) else playWish(r as WishItem)
+                                }
+                                PixelButton(
+                                    "ANOTHER", Modifier.weight(1f),
+                                    enabled = backlog.ifEmpty { wishlist }.size > 1,
+                                ) { roll() }
+                            }
+                        }
+                    }
                 }
             }
             item { SectionTitle("FROM YOUR BACKLOG · ${backlog.size}", Modifier.padding(top = 6.dp)) }
             if (backlog.isEmpty()) item { Hint(if (everything) "Nothing in your backlog matches." else "No backlog games for $platform.") }
             items(backlog.take(LIST_MAX), key = { "g:" + it.id }) { g ->
-                PickRow(g.title, g.platform.ifBlank { deviceName(s, g.device) }) {
-                    val keep = matcher.of(g, s) == platform
-                    vm.update { st ->
-                        st.copy(games = st.games.map { if (it.id == g.id) it.copy(status = "playing", platform = if (keep) it.platform else platform) else it })
-                    }
-                    done(g.title)
-                }
+                PickRow(g.title, g.platform.ifBlank { deviceName(s, g.device) }) { playBacklog(g) }
             }
             if (backlog.size > LIST_MAX) item { Hint("Showing $LIST_MAX of ${backlog.size}. Search to narrow it down.") }
 
@@ -271,18 +321,7 @@ private fun PlatformPickSheet(vm: BacklogViewModel, platform: String, matcher: P
             }
             if (wishlist.isEmpty()) item { Hint(if (everything) "Nothing in your wishlist matches." else "No wishlist games for $platform.") }
             items(wishlist.take(LIST_MAX), key = { "w:" + it.id }) { w ->
-                PickRow(w.title, w.platforms.joinToString(", ")) {
-                    val g = Game(
-                        id = newId(), title = w.title, device = device, status = "playing",
-                        platform = w.platforms.firstOrNull { matcher.of(it) == platform } ?: platform,
-                        genre = w.genres.firstOrNull().orEmpty(), cover = vm.wishImage(w.id),
-                        est = if (w.hours > 0) w.hours else 0.0,
-                        estSource = if (w.hours > 0) "hltb" else "",
-                        addedAt = today(), order = System.currentTimeMillis(),
-                    )
-                    vm.update { st -> st.copy(hiddenWish = st.hiddenWish + w.id, games = st.games + g) }
-                    done(w.title)
-                }
+                PickRow(w.title, w.platforms.joinToString(", ")) { playWish(w) }
             }
             if (wishlist.size > LIST_MAX) item { Hint("Showing $LIST_MAX of ${wishlist.size}. Search to narrow it down.") }
             item { PixelButton("CLOSE", Modifier.padding(top = 8.dp), onClick = onDismiss) }
