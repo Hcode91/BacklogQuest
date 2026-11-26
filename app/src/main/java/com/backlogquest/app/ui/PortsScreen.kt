@@ -198,7 +198,7 @@ fun PortsScreen() {
                     Text(n, color = BQ.Ink, fontSize = 14.sp)
                     Hint(
                         if (signedIn) "You're signed in to Reddit in the app. Try Refresh again later; Reddit sometimes blocks for a while."
-                        else "Reddit often refuses apps that aren't signed in. Signing in to Reddit inside the app usually fixes it.",
+                        else "Reddit only shows its pages to the app when you're signed in. Sign in to Reddit inside the app, then refresh.",
                     )
                     PixelButton(if (signedIn) "SIGN IN AGAIN" else "SIGN IN TO REDDIT", kind = BtnKind.B) { redditSignIn = true }
                 }

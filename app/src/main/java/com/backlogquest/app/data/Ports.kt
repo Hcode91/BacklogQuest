@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -329,86 +330,60 @@ object PortsStore {
     private const val GAP_MS = 600L
 
     /**
-     * Run on a subreddit page in the invisible browser. Reads the listing from inside the page
-     * (so it goes with the browser's cookies and your sign-in), [PAGE_SIZE] posts at a time,
-     * starting after the post [after] (or at the newest), for up to [pages] pages or until it
-     * reaches posts from [stopBefore]. Posts with no GitHub link get the poster's own comments
-     * added, since links are often left in a comment. Returns "" until done, then the posts as
-     * one listing (with Reddit's "after" for the next page), or "ERR 429" and the like.
+     * Run on old.reddit.com in the invisible browser, signed in as you. Reads the subreddit's
+     * pages the way a browser shows them (Reddit has shut its data links to apps), [PAGE_SIZE]
+     * posts at a time, starting after the post [after] (or at the newest), for up to [pages]
+     * pages or until it reaches posts from [stopBefore]. Posts that don't link to GitHub have
+     * their own page opened, and the post's text and the poster's own comments are added, since
+     * links are often left in a comment. Returns "" until done, then the posts in the same form
+     * as Reddit's data listing (with "after" for the next page), or "ERR 404" and the like.
      */
     private fun listingScript(sub: String, after: String?, stopBefore: Long, pages: Int) = """
         (function(){var w=window;
         if(w.__bq===undefined){w.__bq=null;
          var all=[],after=${if (after == null) "null" else "'$after'"},next=null,n=0,MAX=$pages,STOP=$stopBefore,GAP=$GAP_MS;
          function wait(){return new Promise(function(r){setTimeout(r,GAP);});}
-         function get(u){return fetch(u,{credentials:'include',headers:{'Accept':'application/json'}}).then(function(r){if(!r.ok)throw 'ERR '+r.status;return r.json();});}
-         function page(){return get('/r/$sub/new.json?limit=$PAGE_SIZE&raw_json=1'+(after?'&after='+after:'')).then(function(j){
-           var c=(j.data&&j.data.children)||[];all=all.concat(c);next=(j.data&&j.data.after)||null;after=next;n++;
-           var oldest=c.length?c[c.length-1].data.created_utc:0;
+         function get(u){return fetch(u,{credentials:'include'}).then(function(r){if(!r.ok)throw 'ERR '+r.status;return r.text();})
+           .then(function(t){return new DOMParser().parseFromString(t,'text/html');});}
+         function abs(u){if(!u)return '';return u.charAt(0)=='/'?'https://www.reddit.com'+u:u;}
+         function page(){return get('/r/$sub/new/?limit=$PAGE_SIZE'+(after?'&count=25&after='+after:'')).then(function(doc){
+           if(!doc.querySelector('#siteTable'))throw 'ERR blocked';
+           var things=[].slice.call(doc.querySelectorAll('#siteTable > .thing.link')).filter(function(t){return !t.classList.contains('promoted');});
+           things.forEach(function(t){
+             var a=t.querySelector('a.title'),fl=t.querySelector('.linkflairlabel');
+             all.push({data:{id:(t.getAttribute('data-fullname')||'').replace('t3_',''),subreddit:t.getAttribute('data-subreddit')||'$sub',
+               title:a?a.textContent:'',permalink:t.getAttribute('data-permalink')||'',
+               created_utc:Math.floor((+t.getAttribute('data-timestamp')||0)/1000),author:t.getAttribute('data-author')||'',
+               link_flair_text:fl?fl.textContent:'',url:abs(t.getAttribute('data-url')),selftext:''}});
+           });
+           n++;
+           next=(things.length&&doc.querySelector('.nav-buttons .next-button a'))?things[things.length-1].getAttribute('data-fullname'):null;
+           after=next;
+           var oldest=things.length?Math.floor((+things[things.length-1].getAttribute('data-timestamp')||0)/1000):0;
            if(next&&n<MAX&&oldest>STOP)return wait().then(page);
          }).catch(function(e){if(n==0)throw e;});}
-         function gh(d){return /github\.com\//i.test((d.url||'')+' '+(d.url_overridden_by_dest||'')+' '+(d.selftext||''));}
-         function comments(){
-           var todo=all.map(function(c){return c.data;}).filter(function(d){return d.created_utc>STOP&&!gh(d);});
+         function gh(d){return /github\.com\//i.test(d.url+' '+d.selftext);}
+         function details(){
+           var todo=all.map(function(c){return c.data;}).filter(function(d){return d.created_utc>STOP&&!gh(d)&&d.permalink;});
            return todo.reduce(function(p,d){return p.then(wait).then(function(){
-             return get('/comments/'+d.id+'.json?limit=100&depth=2&raw_json=1').then(function(j){
-               var cs=(j[1]&&j[1].data&&j[1].data.children)||[];
-               var extra=cs.map(function(x){return x.data||{};}).filter(function(x){return x.author===d.author;}).map(function(x){return x.body||'';}).join(' ');
-               if(extra)d.selftext=(d.selftext||'')+' '+extra;
+             return get(d.permalink+'?limit=100&depth=2').then(function(doc){
+               var body=doc.querySelector('#siteTable .thing.link .expando .md');
+               var parts=[body?body.innerHTML:''];
+               [].slice.call(doc.querySelectorAll('.commentarea .thing.comment')).forEach(function(c){
+                 if(c.getAttribute('data-author')===d.author){var m=c.querySelector('.entry .md');if(m)parts.push(m.innerHTML);}
+               });
+               d.selftext=parts.join(' ');
              }).catch(function(){});});},Promise.resolve());}
-         page().then(comments).then(function(){w.__bq=JSON.stringify({data:{children:all,after:next}});})
+         page().then(details).then(function(){w.__bq=JSON.stringify({data:{children:all,after:next}});})
            .catch(function(e){e=''+e;w.__bq=e.indexOf('ERR')==0?e:'ERR '+e;});}
         return w.__bq||'';})()
     """.trimIndent()
-
-    /** The same as [listingScript], with direct requests. Null if Reddit refuses the first page. */
-    private fun listingDirect(sub: String, startAfter: String?, stopBefore: Long, pages: Int, headers: Map<String, String>): String? {
-        val all = JSONArray()
-        var after: String? = startAfter
-        var next: String? = null
-        for (n in 0 until pages) {
-            if (n > 0) Thread.sleep(GAP_MS)
-            val r = runCatching {
-                Http.call("https://www.reddit.com/r/$sub/new.json?limit=$PAGE_SIZE&raw_json=1" + (after?.let { "&after=$it" } ?: ""), headers = headers)
-            }.getOrNull()
-            if (r == null || r.code !in 200..299) {
-                if (n == 0) {
-                    redditProblem = r?.let { "Reddit answered ${it.code}" } ?: "Reddit couldn't be reached"
-                    return null
-                }
-                break
-            }
-            val data = runCatching { JSONObject(r.body).optJSONObject("data") }.getOrNull() ?: if (n == 0) return null else break
-            val kids = data.optJSONArray("children") ?: JSONArray()
-            for (i in 0 until kids.length()) all.put(kids.get(i))
-            next = if (data.isNull("after")) null else data.optString("after").ifBlank { null }
-            after = next
-            val oldest = kids.optJSONObject(kids.length() - 1)?.optJSONObject("data")?.optDouble("created_utc", 0.0) ?: 0.0
-            if (next == null || oldest <= stopBefore) break
-        }
-        // Posts with no GitHub link: look for one in the poster's own comments.
-        for (i in 0 until all.length()) {
-            val d = all.optJSONObject(i)?.optJSONObject("data") ?: continue
-            if (d.optDouble("created_utc", 0.0) <= stopBefore) continue
-            val text = listOf("url", "url_overridden_by_dest", "selftext").joinToString(" ") { if (d.isNull(it)) "" else d.optString(it) }
-            if (RedditPorts.githubRepos(text).isNotEmpty()) continue
-            Thread.sleep(GAP_MS)
-            val r = runCatching {
-                Http.call("https://www.reddit.com/comments/${d.optString("id")}.json?limit=100&depth=2&raw_json=1", headers = headers)
-            }.getOrNull() ?: continue
-            if (r.code == 429 || r.code == 403) break
-            if (r.code !in 200..299) continue
-            val extra = RedditPorts.authorComments(r.body, d.optString("author"))
-            if (extra.isNotBlank()) d.put("selftext", (if (d.isNull("selftext")) "" else d.optString("selftext")) + " " + extra)
-        }
-        return JSONObject().put("data", JSONObject().put("children", all).put("after", next ?: JSONObject.NULL)).toString()
-    }
 
     /**
      * Reads each subreddit. [older]: the next [PAGE_SIZE] posts older than any read so far.
      * Otherwise: the newest posts, back to the newest one already saved (the very first time,
      * just the newest [PAGE_SIZE]). Every post is read once; the posts that link to a GitHub
-     * project are returned. Tried with direct requests first, then in the invisible browser.
+     * project are returned. Read in the invisible browser, signed in as you.
      * Null if nothing could be read at all.
      */
     private suspend fun fetchReddit(ctx: Context, older: Boolean): List<RedditPost>? {
@@ -416,12 +391,8 @@ object PortsStore {
         var anyOk = false
         redditProblem = ""
         val prefs = prefs(ctx)
-        val cookies = withContext(Dispatchers.Main) { redditCookies() }
         val agent = withContext(Dispatchers.Main) { PageReader.chromeAgent(ctx) }
-        val headers = buildMap {
-            put("User-Agent", UA)
-            if (cookies != null) put("Cookie", cookies)
-        }
+        var n = 0
         for (sub in RedditPorts.SUBS) {
             val saved = posts.filter { it.sub.equals(sub, true) }
             // Newest post read before; saved posts count, so they're never read again.
@@ -432,15 +403,16 @@ object PortsStore {
             val after = if (older) cursor else null
             val stopBefore = if (older || newest == 0L) 0L else newest
             val pages = if (older || newest == 0L) 1 else NEW_PAGES
-            val text = withContext(Dispatchers.IO) { listingDirect(sub, after, stopBefore, pages, headers) }
-                ?: runCatching {
+            if (n++ > 0) delay(GAP_MS)
+            val text = runCatching {
                     val got = PageReader.read(
-                        ctx, "https://www.reddit.com/r/$sub/new/", listingScript(sub, after, stopBefore, pages),
-                        timeoutMs = 90_000, userAgent = agent,
+                        ctx, "https://old.reddit.com/r/$sub/new/", listingScript(sub, after, stopBefore, pages),
+                        timeoutMs = 120_000, userAgent = agent,
                     )
                     when {
                         got == null -> { redditProblem = "Reddit didn't load in the app's browser"; null }
-                        got.startsWith("ERR") -> { redditProblem = "Reddit answered ${got.removePrefix("ERR ")} in the app's browser"; null }
+                        got == "ERR blocked" -> { redditProblem = "Reddit showed a sign-in or blocked page"; null }
+                        got.startsWith("ERR") -> { redditProblem = "Reddit answered ${got.removePrefix("ERR ")}"; null }
                         else -> got
                     }
                 }.getOrNull()
