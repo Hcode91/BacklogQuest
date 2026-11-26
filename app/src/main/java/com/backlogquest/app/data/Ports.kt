@@ -276,10 +276,25 @@ object PortsStore {
     /** What went wrong the last time Reddit was read, for the message under the list. */
     private var redditProblem = ""
 
-    /** Shows the listing's text when the page is Reddit's JSON, or "" while it isn't (yet). */
-    private const val JSON_SCRIPT =
-        "(function(){var b=document.body;var t=b?(b.innerText||b.textContent||''):'';t=t.trim();" +
-            "return t.charAt(0)=='{'&&t.indexOf('\"children\"')>0?t:'';})()"
+    /**
+     * Run on a Reddit page in the invisible browser: fetches [path] from the page itself, so it
+     * goes with the browser's cookies (and your Reddit sign-in, if you've signed in). Returns ""
+     * until the answer is in, then the JSON, or "ERR 403" and the like.
+     */
+    private fun fetchScript(path: String) =
+        "(function(){var w=window;if(w.__bq===undefined){w.__bq=null;" +
+            "fetch('$path',{credentials:'include',headers:{'Accept':'application/json'}})" +
+            ".then(function(r){return r.text().then(function(t){w.__bq=r.ok?t:('ERR '+r.status);});})" +
+            ".catch(function(e){w.__bq='ERR '+e;});}" +
+            "return w.__bq||'';})()"
+
+    /** Your Reddit cookies from the in-app browser, if you've signed in there. */
+    private fun redditCookies(): String? = runCatching {
+        android.webkit.CookieManager.getInstance().getCookie("https://www.reddit.com")
+    }.getOrNull()?.takeIf { it.isNotBlank() }
+
+    /** Whether you've signed in to Reddit in the app. */
+    fun redditSignedIn(): Boolean = redditCookies()?.contains("reddit_session") == true
 
     /**
      * The newest posts from each subreddit (and, the first time, the best of all time).
@@ -296,8 +311,13 @@ object PortsStore {
             for (page in pages) {
                 val extra = if (page == "top") "&t=all" else ""
                 val jsonUrl = "https://www.reddit.com/r/$sub/$page.json?limit=100&raw_json=1$extra"
+                val cookies = withContext(Dispatchers.Main) { redditCookies() }
                 val parsed = withContext(Dispatchers.IO) {
-                    val json = runCatching { Http.call(jsonUrl, headers = mapOf("User-Agent" to UA)) }.getOrNull()
+                    val headers = buildMap {
+                        put("User-Agent", UA)
+                        if (cookies != null) put("Cookie", cookies)
+                    }
+                    val json = runCatching { Http.call(jsonUrl, headers = headers) }.getOrNull()
                     if (json != null && json.code !in 200..299) redditProblem = "Reddit answered ${json.code}"
                     json?.takeIf { it.code in 200..299 }?.let { r -> runCatching { RedditPorts.parseJson(r.body, sub) }.getOrNull() }
                         ?: runCatching {
@@ -305,8 +325,14 @@ object PortsStore {
                             if (r.code in 200..299) RedditPorts.parseRss(r.body, sub) else null
                         }.getOrNull()
                 } ?: runCatching {
-                    PageReader.read(ctx, jsonUrl, JSON_SCRIPT, timeoutMs = 15_000)
-                        ?.let { RedditPorts.parseJson(it, sub) }
+                    // Open the subreddit like a normal visit, then ask for the listing from inside the page.
+                    val path = "/r/$sub/$page.json?limit=100&raw_json=1$extra"
+                    val got = PageReader.read(ctx, "https://www.reddit.com/r/$sub/$page/", fetchScript(path), timeoutMs = 25_000)
+                    when {
+                        got == null -> { redditProblem = "Reddit didn't load in the app's browser"; null }
+                        got.startsWith("ERR") -> { redditProblem = "Reddit answered ${got.removePrefix("ERR ")} in the app's browser"; null }
+                        else -> RedditPorts.parseJson(got, sub)
+                    }
                 }.getOrNull()
                 if (parsed != null) {
                     anyOk = true

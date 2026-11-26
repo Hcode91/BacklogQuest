@@ -1,6 +1,15 @@
 package com.backlogquest.app.ui
 
+import android.annotation.SuppressLint
 import android.content.Intent
+import android.webkit.CookieManager
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -64,6 +73,13 @@ fun PortsScreen() {
     var hideInactive by rememberSaveable { mutableStateOf(true) }
     var hideAi by rememberSaveable { mutableStateOf(false) }
     var limit by remember { mutableIntStateOf(PAGE) }
+    var redditSignIn by remember { mutableStateOf(false) }
+    var signedIn by remember { mutableStateOf(PortsStore.redditSignedIn()) }
+    if (redditSignIn) RedditSignIn {
+        redditSignIn = false
+        signedIn = PortsStore.redditSignedIn()
+        scope.launch { PortsStore.refresh(ctx.applicationContext) }
+    }
 
     val weekAgo = LocalDate.now().toEpochDay() - 7
     val isNew = { p: Port -> (firstSeen[p.id] ?: 0L) > weekAgo }
@@ -174,7 +190,18 @@ fun PortsScreen() {
         }
 
         PortsStore.error?.let { e -> item { Panel { Text(e, color = BQ.Ink, fontSize = 14.sp) } } }
-        PortsStore.redditNote?.let { n -> item { Hint(n) } }
+        PortsStore.redditNote?.let { n ->
+            item {
+                Panel {
+                    Text(n, color = BQ.Ink, fontSize = 14.sp)
+                    Hint(
+                        if (signedIn) "You're signed in to Reddit in the app. Try Refresh again later; Reddit sometimes blocks for a while."
+                        else "Reddit often refuses apps that aren't signed in. Signing in to Reddit inside the app usually fixes it.",
+                    )
+                    PixelButton(if (signedIn) "SIGN IN AGAIN" else "SIGN IN TO REDDIT", kind = BtnKind.B) { redditSignIn = true }
+                }
+            }
+        }
         if (all.isEmpty() && PortsStore.busy) item { Hint("Downloading the list (about 5 MB, once a day)…") }
         if (all.isNotEmpty() && shown.isEmpty()) item {
             Hint(if (view == "watching") "You're not watching anything here yet. Tap ☆ WATCH on a project." else "Nothing matches.")
@@ -297,4 +324,48 @@ private fun ActionText(text: String, onClick: () -> Unit) {
         Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(vertical = 4.dp),
         color = BQ.B, fontFamily = BQ.Mono, fontWeight = FontWeight.Bold, fontSize = 12.sp,
     )
+}
+
+/**
+ * Reddit's sign-in page in a full-screen browser. The app's invisible browser shares its
+ * cookies, so once you're signed in here the Ports tab reads Reddit as you.
+ */
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun RedditSignIn(onDone: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDone,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        Column(
+            Modifier.fillMaxSize().background(BQ.Shell).systemBarsPadding().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionTitle("SIGN IN TO REDDIT", Modifier.weight(1f))
+                PixelButton("DONE", kind = BtnKind.B, onClick = onDone)
+            }
+            Hint(
+                "Sign in with your Reddit username and password (\"Continue with Google/Apple\" doesn't work inside apps), " +
+                    "then tap DONE. The app only uses it to read r/AndroidNativePorts and r/decomps.",
+            )
+            AndroidView(
+                factory = { c ->
+                    WebView(c).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        CookieManager.getInstance().setAcceptCookie(true)
+                        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView, url: String?) {
+                                CookieManager.getInstance().flush()
+                            }
+                        }
+                        loadUrl("https://www.reddit.com/login/")
+                    }
+                },
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+        }
+    }
 }
