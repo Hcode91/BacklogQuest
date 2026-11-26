@@ -83,12 +83,14 @@ fun PortsScreen() {
         "new" to "New this week",
         "android" to "Android",
         "browser" to "Play in browser",
+        "reddit" to "On Reddit",
     )
     fun inView(p: Port, v: String) = when (v) {
         "watching" -> p.id in watched
         "new" -> isNew(p)
         "android" -> p.android
         "browser" -> p.browser
+        "reddit" -> p.redditUrl.isNotBlank()
         else -> true
     }
     val viewCounts = remember(base, watched, firstSeen) { views.associate { (k, _) -> k to base.count { inView(it, k) } } }
@@ -104,6 +106,8 @@ fun PortsScreen() {
             "stars" -> list.sortedByDescending { it.stars }
             "updated" -> list.sortedByDescending { it.lastCommit }
             "release" -> list.sortedByDescending { it.releaseDate }
+            // Reddit projects have no score: rank them by stars among themselves.
+            "score" -> list.sortedWith(compareByDescending<Port> { it.score }.thenByDescending { it.stars })
             "az" -> list.sortedBy { it.title.lowercase() }
             else -> list.sortedByDescending { it.score }
         }
@@ -124,7 +128,8 @@ fun PortsScreen() {
                 }
                 Hint(
                     "Decomps, recomps, source ports and engine remakes, from the Awesome Decomp Games list" +
-                        (if (PortsStore.listDate.isNotBlank()) " (updated ${PortsStore.listDate})." else ".") +
+                        (if (PortsStore.listDate.isNotBlank()) " (updated ${PortsStore.listDate})" else "") +
+                        " and posts on r/AndroidNativePorts and r/decomps that link to a GitHub project." +
                         " Tap a project to open it. Watch one to be told here when it has a new release.",
                 )
                 if (updates.isNotEmpty()) {
@@ -169,6 +174,7 @@ fun PortsScreen() {
         }
 
         PortsStore.error?.let { e -> item { Panel { Text(e, color = BQ.Ink, fontSize = 14.sp) } } }
+        PortsStore.redditNote?.let { n -> item { Hint(n) } }
         if (all.isEmpty() && PortsStore.busy) item { Hint("Downloading the list (about 5 MB, once a day)…") }
         if (all.isNotEmpty() && shown.isEmpty()) item {
             Hint(if (view == "watching") "You're not watching anything here yet. Tap ☆ WATCH on a project." else "Nothing matches.")
@@ -189,6 +195,7 @@ fun PortsScreen() {
                     open(ctx, p.releaseUrl)
                 },
                 onPlay = { open(ctx, p.playUrl) },
+                onReddit = { open(ctx, p.redditUrl) },
                 onWatch = { PortsStore.toggleWatch(ctx.applicationContext, p) },
             )
         }
@@ -241,6 +248,7 @@ private fun PortRow(
     onOpen: () -> Unit,
     onRelease: () -> Unit,
     onPlay: () -> Unit,
+    onReddit: () -> Unit,
     onWatch: () -> Unit,
 ) {
     Tile(Modifier.fillMaxWidth(), onClick = onOpen, padding = 10.dp) {
@@ -262,19 +270,21 @@ private fun PortRow(
             if (isNew) StatusLabel("NEW", BQ.OkBg, BQ.Ok)
             if (p.android) StatusLabel("ANDROID", BQ.OkBg, BQ.Ok)
             if (p.browser) StatusLabel("BROWSER")
+            if (p.redditSub.isNotBlank()) StatusLabel("r/${p.redditSub.uppercase()}", BQ.OwnBg, BQ.B)
             if (p.ai) StatusLabel("AI", BQ.CoolBg, BQ.CoolFg)
             if (p.inactive || p.archived) StatusLabel(if (p.archived) "ARCHIVED" else "INACTIVE")
         }
         val meta = listOfNotNull(
-            "★ ${stars(p.stars)}",
+            if (p.fromReddit && p.lastCommit.isBlank()) "checking GitHub…" else "★ ${stars(p.stars)}",
             p.lastCommit.takeIf { it.isNotBlank() }?.let { "updated ${ago(it)}" },
             p.release.takeIf { it.isNotBlank() }?.let { r -> r + (p.releaseDate.takeIf { it.isNotBlank() }?.let { " (${ago(it)})" } ?: "") },
         ).joinToString(" · ")
         Text(meta, color = BQ.Muted, fontFamily = BQ.Mono, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (p.releaseUrl.isNotBlank() || p.playUrl.isNotBlank()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        if (p.releaseUrl.isNotBlank() || p.playUrl.isNotBlank() || p.redditUrl.isNotBlank()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (p.releaseUrl.isNotBlank()) ActionText("DOWNLOADS ›", onRelease)
                 if (p.playUrl.isNotBlank()) ActionText("PLAY IN BROWSER ›", onPlay)
+                if (p.redditUrl.isNotBlank()) ActionText("REDDIT POST ›", onReddit)
             }
         }
     }

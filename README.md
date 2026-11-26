@@ -53,7 +53,9 @@ The data comes from IGDB (the database most game-tracking apps use) through a fr
 
 The **Ports** tab is one list of every game decompilation, static recompilation, source port and engine remake, taken from [Awesome Decomp Games](https://submitgame.github.io/awesome-decomp-games/) (over 3,000 projects, CC0, rebuilt by its maintainers every day). The app downloads the list (about 5 MB) once a day when you open the tab, or with **Refresh**, and keeps it on the phone.
 
-- Search, and filter by view (All, Watching, New this week, Android, Play in browser), type and platform; sort by best score, stars, last update, newest release or name.
+- Posts from **r/AndroidNativePorts** and **r/decomps** are added too, but only ones that link to a GitHub project. A post about a project already on the list adds a **REDDIT POST** link and an r/… badge to it; any other project gets its own entry, named after the post, with its platform and type guessed from the post's title and flair. Each refresh reads the newest 100 posts from each (the first time also the top 100 of all time), and the app keeps every post it has seen.
+- Projects found only on Reddit are looked up on GitHub, 15 per refresh (GitHub allows 60 lookups an hour): ones GitHub says don't exist are dropped, and the rest get their stars, last update and latest release. Each is looked up again after a week.
+- Search, and filter by view (All, Watching, New this week, Android, Play in browser, On Reddit), type and platform; sort by best score, stars, last update, newest release or name.
 - **☆ Watch** a project and it's marked **NEW RELEASE** (and listed first) when it puts out a release you haven't seen. Opening the project or its downloads counts as seeing it.
 - Projects that joined the list in the last 7 days are marked **NEW** (nothing is marked the first time the list is downloaded).
 - **ANDROID** marks projects that mention Android or an APK, so they probably run on the phone. **AI** marks ones the list's sources flag as mostly made with AI; you can hide them. Inactive projects (no commits for two years) are hidden unless you untick that.
