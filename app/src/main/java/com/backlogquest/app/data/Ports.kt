@@ -204,6 +204,7 @@ object PortsStore {
             posts = saved.posts
             info = saved.info
             saved.list?.let { (date, list) -> listDate = date; main = list }
+            redditEnded = RedditPorts.SUBS.all { prefs(ctx).getBoolean("end_v3_$it", false) }
             rebuild()
         }
         val last = prefs(ctx).getLong("fetched", 0L)
@@ -236,26 +237,8 @@ object PortsStore {
                 error = "The ports list couldn't be downloaded. Check your connection."
             }
 
-            // 2. Reddit posts that link to GitHub.
-            val fresh = fetchReddit(ctx)
-            if (fresh == null) {
-                redditNote = "Reddit couldn't be read this time" +
-                    (if (redditProblem.isNotBlank()) " ($redditProblem)" else "") +
-                    (if (posts.isEmpty()) "." else "; its posts are from the last refresh.")
-            }
-            else {
-                posts = RedditPorts.mergePosts(posts, fresh)
-                withContext(Dispatchers.IO) { file(ctx, "reddit.json").writeText(RedditPorts.postsToJson(posts)) }
-            }
-
-            // 3. Look up projects that are only on Reddit, a few at a time (GitHub allows 60 lookups an hour).
-            val todo = RedditPorts.toCheck(posts, main, info, System.currentTimeMillis(), max = 15)
-            if (todo.isNotEmpty()) {
-                val (found, limited) = withContext(Dispatchers.IO) { lookUp(todo) }
-                info = info + found
-                withContext(Dispatchers.IO) { file(ctx, "github.json").writeText(RedditPorts.infoToJson(info)) }
-                if (limited) redditNote = "GitHub is limiting lookups; some Reddit projects will fill in later."
-            }
+            // 2. The newest Reddit posts that link to GitHub, and 3. their projects on GitHub.
+            readReddit(ctx, older = false)
 
             rebuild()
             if (ports.isNotEmpty()) {
@@ -268,6 +251,60 @@ object PortsStore {
             error = e.message ?: "The ports list couldn't be read."
         } finally {
             busy = false
+        }
+    }
+
+    /** Reading older Reddit posts ("Load 20 more"). */
+    var redditBusy by mutableStateOf(false)
+        private set
+    /** Both subreddits have been read back as far as Reddit's listing goes. */
+    var redditEnded by mutableStateOf(false)
+        private set
+
+    /** Reads the next 20 older posts from each subreddit (the ones not read yet). */
+    suspend fun loadMoreReddit(ctx: Context) {
+        if (busy || redditBusy) return
+        redditBusy = true
+        redditNote = null
+        try {
+            readReddit(ctx, older = true)
+            rebuild()
+            // Older posts aren't new to the list: don't mark them NEW.
+            val seen = firstSeen.toMutableMap()
+            ports.forEach { if (it.id !in seen) seen[it.id] = 0L }
+            withContext(Dispatchers.IO) { file(ctx, "first-seen.json").writeText(mapToJson(seen)) }
+            firstSeen = seen
+        } catch (e: Exception) {
+            redditNote = e.message ?: "Reddit couldn't be read."
+        } finally {
+            redditBusy = false
+        }
+    }
+
+    /**
+     * Reads Reddit ([older] = the next 20 older posts, otherwise the newest posts back to the
+     * ones already saved), saves the posts that link to GitHub, and looks a few of their
+     * projects up on GitHub.
+     */
+    private suspend fun readReddit(ctx: Context, older: Boolean) {
+        val fresh = fetchReddit(ctx, older)
+        if (fresh == null) {
+            redditNote = "Reddit couldn't be read this time" +
+                (if (redditProblem.isNotBlank()) " ($redditProblem)" else "") +
+                (if (posts.isEmpty()) "." else "; its posts are from the last time it could.")
+        } else {
+            posts = RedditPorts.mergePosts(posts, fresh)
+            withContext(Dispatchers.IO) { file(ctx, "reddit.json").writeText(RedditPorts.postsToJson(posts)) }
+        }
+        redditEnded = RedditPorts.SUBS.all { prefs(ctx).getBoolean("end_v3_$it", false) }
+
+        // Projects only on Reddit, a few at a time (GitHub allows 60 lookups an hour).
+        val todo = RedditPorts.toCheck(posts, main, info, System.currentTimeMillis(), max = 15)
+        if (todo.isNotEmpty()) {
+            val (found, limited) = withContext(Dispatchers.IO) { lookUp(todo) }
+            info = info + found
+            withContext(Dispatchers.IO) { file(ctx, "github.json").writeText(RedditPorts.infoToJson(info)) }
+            if (limited && redditNote == null) redditNote = "GitHub is limiting lookups; some Reddit projects will fill in later."
         }
     }
 
@@ -284,49 +321,55 @@ object PortsStore {
     /** Whether you've signed in to Reddit in the app. */
     fun redditSignedIn(): Boolean = redditCookies()?.contains("reddit_session") == true
 
-    /** Pages of 100 read from a subreddit at most; Reddit's listings stop at about 1,000 posts. */
-    private const val MAX_PAGES = 10
-    /** Posts without a GitHub link whose comments are checked, per subreddit per refresh. */
-    private const val COMMENT_CHECKS = 120
+    /** Posts read from a subreddit at a time. Small, so Reddit doesn't start refusing. */
+    private const val PAGE_SIZE = 20
+    /** Pages read on a refresh at most, when lots has been posted since the last one. */
+    private const val NEW_PAGES = 3
+    /** Pause between requests to Reddit, in milliseconds. */
+    private const val GAP_MS = 600L
 
     /**
      * Run on a subreddit page in the invisible browser. Reads the listing from inside the page
-     * (so it goes with the browser's cookies and your sign-in), 100 posts at a time, back to
-     * [stopBefore] or as far as Reddit goes. Posts with no GitHub link get the poster's own
-     * comments added, since links are often left in a comment. Returns "" until done, then the
-     * posts as one listing, or "ERR 403" and the like.
+     * (so it goes with the browser's cookies and your sign-in), [PAGE_SIZE] posts at a time,
+     * starting after the post [after] (or at the newest), for up to [pages] pages or until it
+     * reaches posts from [stopBefore]. Posts with no GitHub link get the poster's own comments
+     * added, since links are often left in a comment. Returns "" until done, then the posts as
+     * one listing (with Reddit's "after" for the next page), or "ERR 429" and the like.
      */
-    private fun listingScript(sub: String, stopBefore: Long) = """
+    private fun listingScript(sub: String, after: String?, stopBefore: Long, pages: Int) = """
         (function(){var w=window;
         if(w.__bq===undefined){w.__bq=null;
-         var all=[],after=null,n=0,MAX=$MAX_PAGES,STOP=$stopBefore,CAP=$COMMENT_CHECKS;
+         var all=[],after=${if (after == null) "null" else "'$after'"},next=null,n=0,MAX=$pages,STOP=$stopBefore,GAP=$GAP_MS;
+         function wait(){return new Promise(function(r){setTimeout(r,GAP);});}
          function get(u){return fetch(u,{credentials:'include',headers:{'Accept':'application/json'}}).then(function(r){if(!r.ok)throw 'ERR '+r.status;return r.json();});}
-         function page(){return get('/r/$sub/new.json?limit=100&raw_json=1'+(after?'&after='+after:'')).then(function(j){
-           var c=(j.data&&j.data.children)||[];all=all.concat(c);after=j.data&&j.data.after;n++;
+         function page(){return get('/r/$sub/new.json?limit=$PAGE_SIZE&raw_json=1'+(after?'&after='+after:'')).then(function(j){
+           var c=(j.data&&j.data.children)||[];all=all.concat(c);next=(j.data&&j.data.after)||null;after=next;n++;
            var oldest=c.length?c[c.length-1].data.created_utc:0;
-           if(after&&n<MAX&&oldest>STOP)return page();
+           if(next&&n<MAX&&oldest>STOP)return wait().then(page);
          }).catch(function(e){if(n==0)throw e;});}
          function gh(d){return /github\.com\//i.test((d.url||'')+' '+(d.url_overridden_by_dest||'')+' '+(d.selftext||''));}
          function comments(){
-           var todo=all.map(function(c){return c.data;}).filter(function(d){return d.created_utc>STOP&&!gh(d);}).slice(0,CAP);
-           return todo.reduce(function(p,d){return p.then(function(){
+           var todo=all.map(function(c){return c.data;}).filter(function(d){return d.created_utc>STOP&&!gh(d);});
+           return todo.reduce(function(p,d){return p.then(wait).then(function(){
              return get('/comments/'+d.id+'.json?limit=100&depth=2&raw_json=1').then(function(j){
                var cs=(j[1]&&j[1].data&&j[1].data.children)||[];
                var extra=cs.map(function(x){return x.data||{};}).filter(function(x){return x.author===d.author;}).map(function(x){return x.body||'';}).join(' ');
                if(extra)d.selftext=(d.selftext||'')+' '+extra;
              }).catch(function(){});});},Promise.resolve());}
-         page().then(comments).then(function(){w.__bq=JSON.stringify({data:{children:all}});})
+         page().then(comments).then(function(){w.__bq=JSON.stringify({data:{children:all,after:next}});})
            .catch(function(e){e=''+e;w.__bq=e.indexOf('ERR')==0?e:'ERR '+e;});}
         return w.__bq||'';})()
     """.trimIndent()
 
     /** The same as [listingScript], with direct requests. Null if Reddit refuses the first page. */
-    private fun listingDirect(sub: String, stopBefore: Long, headers: Map<String, String>): String? {
+    private fun listingDirect(sub: String, startAfter: String?, stopBefore: Long, pages: Int, headers: Map<String, String>): String? {
         val all = JSONArray()
-        var after: String? = null
-        for (n in 0 until MAX_PAGES) {
+        var after: String? = startAfter
+        var next: String? = null
+        for (n in 0 until pages) {
+            if (n > 0) Thread.sleep(GAP_MS)
             val r = runCatching {
-                Http.call("https://www.reddit.com/r/$sub/new.json?limit=100&raw_json=1" + (after?.let { "&after=$it" } ?: ""), headers = headers)
+                Http.call("https://www.reddit.com/r/$sub/new.json?limit=$PAGE_SIZE&raw_json=1" + (after?.let { "&after=$it" } ?: ""), headers = headers)
             }.getOrNull()
             if (r == null || r.code !in 200..299) {
                 if (n == 0) {
@@ -338,19 +381,18 @@ object PortsStore {
             val data = runCatching { JSONObject(r.body).optJSONObject("data") }.getOrNull() ?: if (n == 0) return null else break
             val kids = data.optJSONArray("children") ?: JSONArray()
             for (i in 0 until kids.length()) all.put(kids.get(i))
-            after = if (data.isNull("after")) null else data.optString("after").ifBlank { null }
+            next = if (data.isNull("after")) null else data.optString("after").ifBlank { null }
+            after = next
             val oldest = kids.optJSONObject(kids.length() - 1)?.optJSONObject("data")?.optDouble("created_utc", 0.0) ?: 0.0
-            if (after == null || oldest <= stopBefore) break
+            if (next == null || oldest <= stopBefore) break
         }
         // Posts with no GitHub link: look for one in the poster's own comments.
-        var checks = 0
         for (i in 0 until all.length()) {
-            if (checks >= COMMENT_CHECKS) break
             val d = all.optJSONObject(i)?.optJSONObject("data") ?: continue
             if (d.optDouble("created_utc", 0.0) <= stopBefore) continue
             val text = listOf("url", "url_overridden_by_dest", "selftext").joinToString(" ") { if (d.isNull(it)) "" else d.optString(it) }
             if (RedditPorts.githubRepos(text).isNotEmpty()) continue
-            checks++
+            Thread.sleep(GAP_MS)
             val r = runCatching {
                 Http.call("https://www.reddit.com/comments/${d.optString("id")}.json?limit=100&depth=2&raw_json=1", headers = headers)
             }.getOrNull() ?: continue
@@ -359,15 +401,17 @@ object PortsStore {
             val extra = RedditPorts.authorComments(r.body, d.optString("author"))
             if (extra.isNotBlank()) d.put("selftext", (if (d.isNull("selftext")) "" else d.optString("selftext")) + " " + extra)
         }
-        return JSONObject().put("data", JSONObject().put("children", all)).toString()
+        return JSONObject().put("data", JSONObject().put("children", all).put("after", next ?: JSONObject.NULL)).toString()
     }
 
     /**
-     * Every post in each subreddit that links to a GitHub project, back to the newest post
-     * seen last time (the first time, as far back as Reddit's listing goes). Tried with direct
-     * requests first, then in the invisible browser. Null if nothing could be read at all.
+     * Reads each subreddit. [older]: the next [PAGE_SIZE] posts older than any read so far.
+     * Otherwise: the newest posts, back to the newest one already saved (the very first time,
+     * just the newest [PAGE_SIZE]). Every post is read once; the posts that link to a GitHub
+     * project are returned. Tried with direct requests first, then in the invisible browser.
+     * Null if nothing could be read at all.
      */
-    private suspend fun fetchReddit(ctx: Context): List<RedditPost>? {
+    private suspend fun fetchReddit(ctx: Context, older: Boolean): List<RedditPost>? {
         val out = ArrayList<RedditPost>()
         var anyOk = false
         redditProblem = ""
@@ -379,14 +423,20 @@ object PortsStore {
             if (cookies != null) put("Cookie", cookies)
         }
         for (sub in RedditPorts.SUBS) {
-            // A day's overlap, in case a post was late to appear. 0 = read everything.
-            val newest = prefs.getLong("newest_v2_$sub", 0L)
-            val stopBefore = if (newest > 0) newest - 24 * 3600 else 0L
-            val text = withContext(Dispatchers.IO) { listingDirect(sub, stopBefore, headers) }
+            val saved = posts.filter { it.sub.equals(sub, true) }
+            // Newest post read before; saved posts count, so they're never read again.
+            val newest = maxOf(prefs.getLong("newest_v3_$sub", 0L), saved.maxOfOrNull { it.created } ?: 0L)
+            // Where reading older posts carries on from: Reddit's own marker, or the oldest saved post.
+            val cursor = prefs.getString("after_v3_$sub", null) ?: saved.minByOrNull { it.created }?.let { "t3_${it.id}" }
+            if (older && prefs.getBoolean("end_v3_$sub", false)) continue
+            val after = if (older) cursor else null
+            val stopBefore = if (older || newest == 0L) 0L else newest
+            val pages = if (older || newest == 0L) 1 else NEW_PAGES
+            val text = withContext(Dispatchers.IO) { listingDirect(sub, after, stopBefore, pages, headers) }
                 ?: runCatching {
                     val got = PageReader.read(
-                        ctx, "https://www.reddit.com/r/$sub/new/", listingScript(sub, stopBefore),
-                        timeoutMs = if (stopBefore == 0L) 240_000 else 90_000, userAgent = agent,
+                        ctx, "https://www.reddit.com/r/$sub/new/", listingScript(sub, after, stopBefore, pages),
+                        timeoutMs = 90_000, userAgent = agent,
                     )
                     when {
                         got == null -> { redditProblem = "Reddit didn't load in the app's browser"; null }
@@ -394,11 +444,19 @@ object PortsStore {
                         else -> got
                     }
                 }.getOrNull()
-            val parsed = text?.let { t -> runCatching { withContext(Dispatchers.Default) { RedditPorts.parseJson(t, sub) to RedditPorts.newestCreated(t) } }.getOrNull() }
                 ?: continue
+            val parsed = runCatching { withContext(Dispatchers.Default) { RedditPorts.parseJson(text, sub) } }.getOrNull() ?: continue
             anyOk = true
-            out += parsed.first
-            if (parsed.second > newest) prefs.edit().putLong("newest_v2_$sub", parsed.second).apply()
+            out += parsed
+            val top = RedditPorts.newestCreated(text)
+            val next = runCatching { JSONObject(text).optJSONObject("data")?.let { d -> if (d.isNull("after")) null else d.optString("after") } }.getOrNull()
+            prefs.edit().apply {
+                if (top > newest) putLong("newest_v3_$sub", top)
+                // Reading older posts, or the very first read: remember where the next older page starts.
+                if (older || cursor == null) {
+                    if (next.isNullOrBlank()) putBoolean("end_v3_$sub", true) else putString("after_v3_$sub", next)
+                }
+            }.apply()
         }
         return if (anyOk) out else null
     }

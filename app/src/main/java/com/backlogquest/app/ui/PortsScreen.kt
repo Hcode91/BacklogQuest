@@ -187,6 +187,7 @@ fun PortsScreen() {
                     }
                     if (PortsStore.busy && all.isNotEmpty()) Hint("Updating…")
                 }
+                if (view == "reddit") RedditMore(scope, ctx)
             }
         }
 
@@ -230,6 +231,9 @@ fun PortsScreen() {
         if (shown.size > limit) item {
             PixelButton("SHOW MORE (${shown.size - limit} LEFT)", Modifier.fillMaxWidth()) { limit += PAGE }
         }
+        if (view == "reddit" && shown.size <= limit && all.isNotEmpty()) item {
+            RedditMore(scope, ctx)
+        }
         if (all.isNotEmpty()) item {
             Text(
                 "List: Awesome Decomp Games (CC0) · open the website",
@@ -241,6 +245,22 @@ fun PortsScreen() {
 }
 
 private const val PAGE = 150
+
+/** Reads the next 20 older posts from each subreddit; posts already read are never asked for again. */
+@Composable
+private fun RedditMore(scope: kotlinx.coroutines.CoroutineScope, ctx: android.content.Context) {
+    when {
+        PortsStore.redditEnded -> Hint("That's every post Reddit lists for both subreddits.")
+        else -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            PixelButton(
+                if (PortsStore.redditBusy) "READING REDDIT…" else "LOAD 20 MORE FROM REDDIT",
+                Modifier.fillMaxWidth(),
+                enabled = !PortsStore.redditBusy && !PortsStore.busy,
+            ) { scope.launch { PortsStore.loadMoreReddit(ctx.applicationContext) } }
+            Hint("Reads the next 20 older posts from each subreddit. Posts already read are kept, not read again.")
+        }
+    }
+}
 /** Reddit's older sign-in page: a plain form that works in any browser. */
 private const val OLD_LOGIN = "https://old.reddit.com/login"
 private const val NEW_LOGIN = "https://www.reddit.com/login/"
