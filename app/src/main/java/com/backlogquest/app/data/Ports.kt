@@ -327,7 +327,8 @@ object PortsStore {
                 } ?: runCatching {
                     // Open the subreddit like a normal visit, then ask for the listing from inside the page.
                     val path = "/r/$sub/$page.json?limit=100&raw_json=1$extra"
-                    val got = PageReader.read(ctx, "https://www.reddit.com/r/$sub/$page/", fetchScript(path), timeoutMs = 25_000)
+                    val got = PageReader.read(ctx, "https://www.reddit.com/r/$sub/$page/", fetchScript(path), timeoutMs = 25_000,
+                        userAgent = withContext(Dispatchers.Main) { PageReader.chromeAgent(ctx) })
                     when {
                         got == null -> { redditProblem = "Reddit didn't load in the app's browser"; null }
                         got.startsWith("ERR") -> { redditProblem = "Reddit answered ${got.removePrefix("ERR ")} in the app's browser"; null }

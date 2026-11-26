@@ -22,7 +22,24 @@ import kotlin.coroutines.resume
 object PageReader {
 
     @SuppressLint("SetJavaScriptEnabled")
-    suspend fun read(context: Context, url: String, script: String, timeoutMs: Long = 25_000): String? =
+    /**
+     * The phone's own Chrome user agent, without the marks that say it's an app's built-in
+     * browser ("; wv" and "Version/4.0"). Some sites, like Reddit, refuse built-in browsers.
+     */
+    fun chromeAgent(context: Context): String = runCatching {
+        android.webkit.WebSettings.getDefaultUserAgent(context)
+            .replace("; wv", "")
+            .replace(Regex("""Version/\d+(\.\d+)*\s"""), "")
+    }.getOrDefault("")
+
+    suspend fun read(
+        context: Context,
+        url: String,
+        script: String,
+        timeoutMs: Long = 25_000,
+        /** Pretend to be this browser; null keeps the built-in browser's own. */
+        userAgent: String? = null,
+    ): String? =
         withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
                 val web = WebView(context.applicationContext)
@@ -62,6 +79,7 @@ object PageReader {
 
                 web.settings.javaScriptEnabled = true
                 web.settings.domStorageEnabled = true
+                if (!userAgent.isNullOrBlank()) web.settings.userAgentString = userAgent
                 web.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, u: String?) {
                         handler.removeCallbacksAndMessages(null)

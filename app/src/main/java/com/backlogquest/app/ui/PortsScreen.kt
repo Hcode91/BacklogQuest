@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.backlogquest.app.data.PageReader
 import com.backlogquest.app.data.Port
 import com.backlogquest.app.data.Ports
 import com.backlogquest.app.data.PortsStore
@@ -240,6 +241,9 @@ fun PortsScreen() {
 }
 
 private const val PAGE = 150
+/** Reddit's older sign-in page: a plain form that works in any browser. */
+private const val OLD_LOGIN = "https://old.reddit.com/login"
+private const val NEW_LOGIN = "https://www.reddit.com/login/"
 
 private fun open(ctx: android.content.Context, url: String) {
     if (url.isBlank()) return
@@ -349,11 +353,27 @@ private fun RedditSignIn(onDone: () -> Unit) {
                 "Sign in with your Reddit username and password (\"Continue with Google/Apple\" doesn't work inside apps), " +
                     "then tap DONE. The app only uses it to read r/AndroidNativePorts and r/decomps.",
             )
+            var web by remember { mutableStateOf<WebView?>(null) }
+            var oldPage by remember { mutableStateOf(true) }
+            Text(
+                if (oldPage) "Page blank or not working? Try Reddit's newer sign-in page ›" else "Back to the simple sign-in page ›",
+                Modifier.clickable {
+                    oldPage = !oldPage
+                    web?.loadUrl(if (oldPage) OLD_LOGIN else NEW_LOGIN)
+                }.padding(vertical = 4.dp),
+                color = BQ.B, fontSize = 13.sp,
+            )
             AndroidView(
                 factory = { c ->
                     WebView(c).apply {
+                        // White behind the page, so a page that's still loading doesn't look like a black screen.
+                        setBackgroundColor(android.graphics.Color.WHITE)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
+                        settings.loadWithOverviewMode = true
+                        settings.useWideViewPort = true
+                        // Reddit refuses some built-in browsers: present as the phone's Chrome.
+                        PageReader.chromeAgent(c).takeIf { it.isNotBlank() }?.let { settings.userAgentString = it }
                         CookieManager.getInstance().setAcceptCookie(true)
                         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                         webViewClient = object : WebViewClient() {
@@ -361,7 +381,8 @@ private fun RedditSignIn(onDone: () -> Unit) {
                                 CookieManager.getInstance().flush()
                             }
                         }
-                        loadUrl("https://www.reddit.com/login/")
+                        loadUrl(OLD_LOGIN)
+                        web = this
                     }
                 },
                 modifier = Modifier.weight(1f).fillMaxWidth(),
