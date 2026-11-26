@@ -237,8 +237,12 @@ object PortsStore {
             }
 
             // 2. Reddit posts that link to GitHub.
-            val fresh = withContext(Dispatchers.IO) { fetchReddit(firstTime = posts.isEmpty()) }
-            if (fresh == null) redditNote = "Reddit couldn't be read this time; its posts are from the last refresh."
+            val fresh = fetchReddit(ctx, firstTime = posts.isEmpty())
+            if (fresh == null) {
+                redditNote = "Reddit couldn't be read this time" +
+                    (if (redditProblem.isNotBlank()) " ($redditProblem)" else "") +
+                    (if (posts.isEmpty()) "." else "; its posts are from the last refresh.")
+            }
             else {
                 posts = RedditPorts.mergePosts(posts, fresh)
                 withContext(Dispatchers.IO) { file(ctx, "reddit.json").writeText(RedditPorts.postsToJson(posts)) }
@@ -269,25 +273,41 @@ object PortsStore {
 
     private const val UA = "android:com.backlogquest.app:v1 (BacklogQuest; +https://github.com/Hcode91/BacklogQuest)"
 
+    /** What went wrong the last time Reddit was read, for the message under the list. */
+    private var redditProblem = ""
+
+    /** Shows the listing's text when the page is Reddit's JSON, or "" while it isn't (yet). */
+    private const val JSON_SCRIPT =
+        "(function(){var b=document.body;var t=b?(b.innerText||b.textContent||''):'';t=t.trim();" +
+            "return t.charAt(0)=='{'&&t.indexOf('\\"children\\"')>0?t:'';})()"
+
     /**
      * The newest posts from each subreddit (and, the first time, the best of all time).
-     * Reddit's JSON is tried first, then its feed. Null if nothing could be read at all.
+     * Reddit refuses many apps that aren't signed in, so each page is tried three ways:
+     * its JSON, its feed, and then its JSON in the invisible browser (which Reddit treats
+     * like Chrome on the phone). Null if nothing could be read at all.
      */
-    private fun fetchReddit(firstTime: Boolean): List<RedditPost>? {
+    private suspend fun fetchReddit(ctx: Context, firstTime: Boolean): List<RedditPost>? {
         val out = ArrayList<RedditPost>()
         var anyOk = false
+        redditProblem = ""
         for (sub in RedditPorts.SUBS) {
             val pages = listOf("new") + if (firstTime) listOf("top") else emptyList()
             for (page in pages) {
                 val extra = if (page == "top") "&t=all" else ""
-                val json = runCatching {
-                    Http.call("https://www.reddit.com/r/$sub/$page.json?limit=100&raw_json=1$extra", headers = mapOf("User-Agent" to UA))
+                val jsonUrl = "https://www.reddit.com/r/$sub/$page.json?limit=100&raw_json=1$extra"
+                val parsed = withContext(Dispatchers.IO) {
+                    val json = runCatching { Http.call(jsonUrl, headers = mapOf("User-Agent" to UA)) }.getOrNull()
+                    if (json != null && json.code !in 200..299) redditProblem = "Reddit answered ${json.code}"
+                    json?.takeIf { it.code in 200..299 }?.let { r -> runCatching { RedditPorts.parseJson(r.body, sub) }.getOrNull() }
+                        ?: runCatching {
+                            val r = Http.call("https://www.reddit.com/r/$sub/$page/.rss?limit=100$extra", headers = mapOf("User-Agent" to UA))
+                            if (r.code in 200..299) RedditPorts.parseRss(r.body, sub) else null
+                        }.getOrNull()
+                } ?: runCatching {
+                    PageReader.read(ctx, jsonUrl, JSON_SCRIPT, timeoutMs = 15_000)
+                        ?.let { RedditPorts.parseJson(it, sub) }
                 }.getOrNull()
-                val parsed = json?.takeIf { it.code in 200..299 }?.let { r -> runCatching { RedditPorts.parseJson(r.body, sub) }.getOrNull() }
-                    ?: runCatching {
-                        val r = Http.call("https://www.reddit.com/r/$sub/$page/.rss?limit=100$extra", headers = mapOf("User-Agent" to UA))
-                        if (r.code in 200..299) RedditPorts.parseRss(r.body, sub) else null
-                    }.getOrNull()
                 if (parsed != null) {
                     anyOk = true
                     out += parsed
