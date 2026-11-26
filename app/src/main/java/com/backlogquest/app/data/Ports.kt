@@ -279,7 +279,7 @@ object PortsStore {
     /** Shows the listing's text when the page is Reddit's JSON, or "" while it isn't (yet). */
     private const val JSON_SCRIPT =
         "(function(){var b=document.body;var t=b?(b.innerText||b.textContent||''):'';t=t.trim();" +
-            "return t.charAt(0)=='{'&&t.indexOf('\\"children\\"')>0?t:'';})()"
+            "return t.charAt(0)=='{'&&t.indexOf('\"children\"')>0?t:'';})()"
 
     /**
      * The newest posts from each subreddit (and, the first time, the best of all time).
