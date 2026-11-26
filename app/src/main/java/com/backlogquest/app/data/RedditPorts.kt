@@ -82,6 +82,22 @@ object RedditPorts {
         }
     }
 
+    /** The newest post's time in a listing (seconds since 1970), or 0. */
+    fun newestCreated(text: String): Long {
+        val kids = JSONObject(text).optJSONObject("data")?.optJSONArray("children") ?: return 0
+        return (0 until kids.length()).maxOfOrNull { i ->
+            kids.optJSONObject(i)?.optJSONObject("data")?.optDouble("created_utc", 0.0)?.takeIf { !it.isNaN() }?.toLong() ?: 0L
+        } ?: 0L
+    }
+
+    /** What [author] wrote in a post's comments (Reddit's [post, comments] JSON), as one piece of text. */
+    fun authorComments(text: String, author: String): String = runCatching {
+        val kids = JSONArray(text).optJSONObject(1)?.optJSONObject("data")?.optJSONArray("children") ?: return ""
+        (0 until kids.length()).mapNotNull { kids.optJSONObject(it)?.optJSONObject("data") }
+            .filter { author.isNotBlank() && it.optString("author") == author }
+            .joinToString(" ") { if (it.isNull("body")) "" else it.optString("body") }
+    }.getOrDefault("")
+
     private fun unescape(s: String) = s
         .replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'")
         .replace("&#x27;", "'").replace("&amp;", "&")

@@ -79,4 +79,12 @@ class RedditPortsTests {
         val info = mapOf("a/b" to RepoInfo(true, 5, "2026-11-01", "d", false, "v1", "2026-11-02", "u", 9))
         assertEquals(info, RedditPorts.infoFromJson(RedditPorts.infoToJson(info)))
     }
+
+    @Test fun `links left in the poster's comments count`() {
+        val comments = """[{"data":{"children":[]}},{"data":{"children":[
+            {"data":{"author":"dev","body":"Source: https://github.com/dev/CoolPort"}},
+            {"data":{"author":"someone","body":"fake https://github.com/other/thing"}}]}}]"""
+        assertEquals("Source: https://github.com/dev/CoolPort", RedditPorts.authorComments(comments, "dev"))
+        assertEquals(1_764_000_200L, RedditPorts.newestCreated(listing))
+    }
 }

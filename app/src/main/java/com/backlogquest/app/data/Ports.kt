@@ -237,7 +237,7 @@ object PortsStore {
             }
 
             // 2. Reddit posts that link to GitHub.
-            val fresh = fetchReddit(ctx, firstTime = posts.isEmpty())
+            val fresh = fetchReddit(ctx)
             if (fresh == null) {
                 redditNote = "Reddit couldn't be read this time" +
                     (if (redditProblem.isNotBlank()) " ($redditProblem)" else "") +
@@ -276,18 +276,6 @@ object PortsStore {
     /** What went wrong the last time Reddit was read, for the message under the list. */
     private var redditProblem = ""
 
-    /**
-     * Run on a Reddit page in the invisible browser: fetches [path] from the page itself, so it
-     * goes with the browser's cookies (and your Reddit sign-in, if you've signed in). Returns ""
-     * until the answer is in, then the JSON, or "ERR 403" and the like.
-     */
-    private fun fetchScript(path: String) =
-        "(function(){var w=window;if(w.__bq===undefined){w.__bq=null;" +
-            "fetch('$path',{credentials:'include',headers:{'Accept':'application/json'}})" +
-            ".then(function(r){return r.text().then(function(t){w.__bq=r.ok?t:('ERR '+r.status);});})" +
-            ".catch(function(e){w.__bq='ERR '+e;});}" +
-            "return w.__bq||'';})()"
-
     /** Your Reddit cookies from the in-app browser, if you've signed in there. */
     private fun redditCookies(): String? = runCatching {
         android.webkit.CookieManager.getInstance().getCookie("https://www.reddit.com")
@@ -296,50 +284,121 @@ object PortsStore {
     /** Whether you've signed in to Reddit in the app. */
     fun redditSignedIn(): Boolean = redditCookies()?.contains("reddit_session") == true
 
+    /** Pages of 100 read from a subreddit at most; Reddit's listings stop at about 1,000 posts. */
+    private const val MAX_PAGES = 10
+    /** Posts without a GitHub link whose comments are checked, per subreddit per refresh. */
+    private const val COMMENT_CHECKS = 120
+
     /**
-     * The newest posts from each subreddit (and, the first time, the best of all time).
-     * Reddit refuses many apps that aren't signed in, so each page is tried three ways:
-     * its JSON, its feed, and then its JSON in the invisible browser (which Reddit treats
-     * like Chrome on the phone). Null if nothing could be read at all.
+     * Run on a subreddit page in the invisible browser. Reads the listing from inside the page
+     * (so it goes with the browser's cookies and your sign-in), 100 posts at a time, back to
+     * [stopBefore] or as far as Reddit goes. Posts with no GitHub link get the poster's own
+     * comments added, since links are often left in a comment. Returns "" until done, then the
+     * posts as one listing, or "ERR 403" and the like.
      */
-    private suspend fun fetchReddit(ctx: Context, firstTime: Boolean): List<RedditPost>? {
+    private fun listingScript(sub: String, stopBefore: Long) = """
+        (function(){var w=window;
+        if(w.__bq===undefined){w.__bq=null;
+         var all=[],after=null,n=0,MAX=$MAX_PAGES,STOP=$stopBefore,CAP=$COMMENT_CHECKS;
+         function get(u){return fetch(u,{credentials:'include',headers:{'Accept':'application/json'}}).then(function(r){if(!r.ok)throw 'ERR '+r.status;return r.json();});}
+         function page(){return get('/r/$sub/new.json?limit=100&raw_json=1'+(after?'&after='+after:'')).then(function(j){
+           var c=(j.data&&j.data.children)||[];all=all.concat(c);after=j.data&&j.data.after;n++;
+           var oldest=c.length?c[c.length-1].data.created_utc:0;
+           if(after&&n<MAX&&oldest>STOP)return page();
+         }).catch(function(e){if(n==0)throw e;});}
+         function gh(d){return /github\.com\//i.test((d.url||'')+' '+(d.url_overridden_by_dest||'')+' '+(d.selftext||''));}
+         function comments(){
+           var todo=all.map(function(c){return c.data;}).filter(function(d){return d.created_utc>STOP&&!gh(d);}).slice(0,CAP);
+           return todo.reduce(function(p,d){return p.then(function(){
+             return get('/comments/'+d.id+'.json?limit=100&depth=2&raw_json=1').then(function(j){
+               var cs=(j[1]&&j[1].data&&j[1].data.children)||[];
+               var extra=cs.map(function(x){return x.data||{};}).filter(function(x){return x.author===d.author;}).map(function(x){return x.body||'';}).join(' ');
+               if(extra)d.selftext=(d.selftext||'')+' '+extra;
+             }).catch(function(){});});},Promise.resolve());}
+         page().then(comments).then(function(){w.__bq=JSON.stringify({data:{children:all}});})
+           .catch(function(e){e=''+e;w.__bq=e.indexOf('ERR')==0?e:'ERR '+e;});}
+        return w.__bq||'';})()
+    """.trimIndent()
+
+    /** The same as [listingScript], with direct requests. Null if Reddit refuses the first page. */
+    private fun listingDirect(sub: String, stopBefore: Long, headers: Map<String, String>): String? {
+        val all = JSONArray()
+        var after: String? = null
+        for (n in 0 until MAX_PAGES) {
+            val r = runCatching {
+                Http.call("https://www.reddit.com/r/$sub/new.json?limit=100&raw_json=1" + (after?.let { "&after=$it" } ?: ""), headers = headers)
+            }.getOrNull()
+            if (r == null || r.code !in 200..299) {
+                if (n == 0) {
+                    redditProblem = r?.let { "Reddit answered ${it.code}" } ?: "Reddit couldn't be reached"
+                    return null
+                }
+                break
+            }
+            val data = runCatching { JSONObject(r.body).optJSONObject("data") }.getOrNull() ?: if (n == 0) return null else break
+            val kids = data.optJSONArray("children") ?: JSONArray()
+            for (i in 0 until kids.length()) all.put(kids.get(i))
+            after = if (data.isNull("after")) null else data.optString("after").ifBlank { null }
+            val oldest = kids.optJSONObject(kids.length() - 1)?.optJSONObject("data")?.optDouble("created_utc", 0.0) ?: 0.0
+            if (after == null || oldest <= stopBefore) break
+        }
+        // Posts with no GitHub link: look for one in the poster's own comments.
+        var checks = 0
+        for (i in 0 until all.length()) {
+            if (checks >= COMMENT_CHECKS) break
+            val d = all.optJSONObject(i)?.optJSONObject("data") ?: continue
+            if (d.optDouble("created_utc", 0.0) <= stopBefore) continue
+            val text = listOf("url", "url_overridden_by_dest", "selftext").joinToString(" ") { if (d.isNull(it)) "" else d.optString(it) }
+            if (RedditPorts.githubRepos(text).isNotEmpty()) continue
+            checks++
+            val r = runCatching {
+                Http.call("https://www.reddit.com/comments/${d.optString("id")}.json?limit=100&depth=2&raw_json=1", headers = headers)
+            }.getOrNull() ?: continue
+            if (r.code == 429 || r.code == 403) break
+            if (r.code !in 200..299) continue
+            val extra = RedditPorts.authorComments(r.body, d.optString("author"))
+            if (extra.isNotBlank()) d.put("selftext", (if (d.isNull("selftext")) "" else d.optString("selftext")) + " " + extra)
+        }
+        return JSONObject().put("data", JSONObject().put("children", all)).toString()
+    }
+
+    /**
+     * Every post in each subreddit that links to a GitHub project, back to the newest post
+     * seen last time (the first time, as far back as Reddit's listing goes). Tried with direct
+     * requests first, then in the invisible browser. Null if nothing could be read at all.
+     */
+    private suspend fun fetchReddit(ctx: Context): List<RedditPost>? {
         val out = ArrayList<RedditPost>()
         var anyOk = false
         redditProblem = ""
+        val prefs = prefs(ctx)
+        val cookies = withContext(Dispatchers.Main) { redditCookies() }
+        val agent = withContext(Dispatchers.Main) { PageReader.chromeAgent(ctx) }
+        val headers = buildMap {
+            put("User-Agent", UA)
+            if (cookies != null) put("Cookie", cookies)
+        }
         for (sub in RedditPorts.SUBS) {
-            val pages = listOf("new") + if (firstTime) listOf("top") else emptyList()
-            for (page in pages) {
-                val extra = if (page == "top") "&t=all" else ""
-                val jsonUrl = "https://www.reddit.com/r/$sub/$page.json?limit=100&raw_json=1$extra"
-                val cookies = withContext(Dispatchers.Main) { redditCookies() }
-                val parsed = withContext(Dispatchers.IO) {
-                    val headers = buildMap {
-                        put("User-Agent", UA)
-                        if (cookies != null) put("Cookie", cookies)
-                    }
-                    val json = runCatching { Http.call(jsonUrl, headers = headers) }.getOrNull()
-                    if (json != null && json.code !in 200..299) redditProblem = "Reddit answered ${json.code}"
-                    json?.takeIf { it.code in 200..299 }?.let { r -> runCatching { RedditPorts.parseJson(r.body, sub) }.getOrNull() }
-                        ?: runCatching {
-                            val r = Http.call("https://www.reddit.com/r/$sub/$page/.rss?limit=100$extra", headers = mapOf("User-Agent" to UA))
-                            if (r.code in 200..299) RedditPorts.parseRss(r.body, sub) else null
-                        }.getOrNull()
-                } ?: runCatching {
-                    // Open the subreddit like a normal visit, then ask for the listing from inside the page.
-                    val path = "/r/$sub/$page.json?limit=100&raw_json=1$extra"
-                    val got = PageReader.read(ctx, "https://www.reddit.com/r/$sub/$page/", fetchScript(path), timeoutMs = 25_000,
-                        userAgent = withContext(Dispatchers.Main) { PageReader.chromeAgent(ctx) })
+            // A day's overlap, in case a post was late to appear. 0 = read everything.
+            val newest = prefs.getLong("newest_v2_$sub", 0L)
+            val stopBefore = if (newest > 0) newest - 24 * 3600 else 0L
+            val text = withContext(Dispatchers.IO) { listingDirect(sub, stopBefore, headers) }
+                ?: runCatching {
+                    val got = PageReader.read(
+                        ctx, "https://www.reddit.com/r/$sub/new/", listingScript(sub, stopBefore),
+                        timeoutMs = if (stopBefore == 0L) 240_000 else 90_000, userAgent = agent,
+                    )
                     when {
                         got == null -> { redditProblem = "Reddit didn't load in the app's browser"; null }
                         got.startsWith("ERR") -> { redditProblem = "Reddit answered ${got.removePrefix("ERR ")} in the app's browser"; null }
-                        else -> RedditPorts.parseJson(got, sub)
+                        else -> got
                     }
                 }.getOrNull()
-                if (parsed != null) {
-                    anyOk = true
-                    out += parsed
-                }
-            }
+            val parsed = text?.let { t -> runCatching { withContext(Dispatchers.Default) { RedditPorts.parseJson(t, sub) to RedditPorts.newestCreated(t) } }.getOrNull() }
+                ?: continue
+            anyOk = true
+            out += parsed.first
+            if (parsed.second > newest) prefs.edit().putLong("newest_v2_$sub", parsed.second).apply()
         }
         return if (anyOk) out else null
     }
