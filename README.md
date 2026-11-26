@@ -49,6 +49,15 @@ Two tabs of their own: **Upcoming** lists games coming out in the next 30 days, 
 
 The data comes from IGDB (the database most game-tracking apps use) through a free Twitch developer app: add its client ID and secret in **Setup → Releases**. They stay on the phone; the access token they buy is renewed by itself.
 
+## Ports
+
+The **Ports** tab is one list of every game decompilation, static recompilation, source port and engine remake, taken from [Awesome Decomp Games](https://submitgame.github.io/awesome-decomp-games/) (over 3,000 projects, CC0, rebuilt by its maintainers every day). The app downloads the list (about 5 MB) once a day when you open the tab, or with **Refresh**, and keeps it on the phone.
+
+- Search, and filter by view (All, Watching, New this week, Android, Play in browser), type and platform; sort by best score, stars, last update, newest release or name.
+- **☆ Watch** a project and it's marked **NEW RELEASE** (and listed first) when it puts out a release you haven't seen. Opening the project or its downloads counts as seeing it.
+- Projects that joined the list in the last 7 days are marked **NEW** (nothing is marked the first time the list is downloaded).
+- **ANDROID** marks projects that mention Android or an APK, so they probably run on the phone. **AI** marks ones the list's sources flag as mostly made with AI; you can hide them. Inactive projects (no commits for two years) are hidden unless you untick that.
+
 ## Starting games and home-screen icons
 
 On a game, **How to start it** chooses the emulator (with the game's file or ID) or an Android app. **▶ Play** starts it and tracks play time; **Home icon** pins a tile with the game's cover to your home screen that does the same.

@@ -64,6 +64,7 @@ enum class Tab(val icon: String, val label: String) {
     DISCOVER("◎", "DISCOVER"),
     UPCOMING("◷", "UPCOMING"),
     RELEASED("✦", "NEW"),
+    PORTS("⇄", "PORTS"),
     EMULATORS("◫", "EMULATORS"),
     PROFILE("★", "PROFILE"),
     SETUP("⚙", "SETUP"),
@@ -160,6 +161,7 @@ fun BacklogApp(vm: BacklogViewModel) {
                     )
                     Tab.UPCOMING -> ReleasesScreen(vm, upcoming = true)
                     Tab.RELEASED -> ReleasesScreen(vm, upcoming = false)
+                    Tab.PORTS -> PortsScreen()
                     Tab.EMULATORS -> EmulatorsScreen(vm)
                     Tab.PROFILE -> ProfileScreen(vm)
                     Tab.SETUP -> SetupScreen(vm)
