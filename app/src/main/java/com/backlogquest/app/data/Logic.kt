@@ -63,9 +63,12 @@ fun stampPlaying(before: AppState, after: AppState, now: Long = System.currentTi
     return if (changed) after.copy(games = games) else after
 }
 
-/** The Now tab's order: the game most recently set to Playing first. Older ones fall back to when they were added. */
+/**
+ * The Now tab's order: in the order you set them to Playing, so the list grows downwards and
+ * the newest is at the bottom. Games from before this was kept go by when they were added.
+ */
 fun nowOrder(games: List<Game>): List<Game> =
-    games.sortedByDescending { if (it.playingSince > 0) it.playingSince else it.order }
+    games.sortedBy { if (it.playingSince > 0) it.playingSince else it.order }
 
 fun newId(): String = java.util.UUID.randomUUID().toString().take(8)
 

@@ -21,8 +21,8 @@ class NowOrderTest {
         assertEquals(7L, stampPlaying(before, after, now = 7).games.single().playingSince)
     }
 
-    @Test fun `most recently started first, older ones by when they were added`() {
+    @Test fun `in the order they were started, newest last`() {
         val games = listOf(game("old", "playing", order = 10), game("new", "playing", since = 300), game("mid", "playing", since = 200))
-        assertEquals(listOf("new", "mid", "old"), nowOrder(games).map { it.id })
+        assertEquals(listOf("old", "mid", "new"), nowOrder(games).map { it.id })
     }
 }
