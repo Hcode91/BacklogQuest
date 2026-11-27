@@ -44,6 +44,29 @@ val STATUSES = listOf(
 
 fun today(): String = LocalDate.now().toString()
 
+/**
+ * Notes the time on every game that has just been set to Playing (a new game, or one that
+ * wasn't Playing before), however it got there, so the Now tab can list them in that order.
+ */
+fun stampPlaying(before: AppState, after: AppState, now: Long = System.currentTimeMillis()): AppState {
+    if (after.games === before.games) return after
+    val was = before.games.associateBy({ it.id }, { it.status })
+    var changed = false
+    val games = after.games.map { g ->
+        val old = was[g.id]
+        // Just set to Playing: an existing game that wasn't, or a new one that doesn't have a time yet.
+        if (g.status == "playing" && old != "playing" && (old != null || g.playingSince == 0L)) {
+            changed = true
+            g.copy(playingSince = now)
+        } else g
+    }
+    return if (changed) after.copy(games = games) else after
+}
+
+/** The Now tab's order: the game most recently set to Playing first. Older ones fall back to when they were added. */
+fun nowOrder(games: List<Game>): List<Game> =
+    games.sortedByDescending { if (it.playingSince > 0) it.playingSince else it.order }
+
 fun newId(): String = java.util.UUID.randomUUID().toString().take(8)
 
 fun inBucket(hours: Double, bucket: String): Boolean {

@@ -882,7 +882,8 @@ class BacklogViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Change your state and save it on the phone. */
     fun update(change: (AppState) -> AppState) {
-        state = change(state)
+        val before = state
+        state = stampPlaying(before, change(before))
         viewModelScope.launch(Dispatchers.IO) {
             saveLock.withLock { Store.saveState(dir, state) }
         }

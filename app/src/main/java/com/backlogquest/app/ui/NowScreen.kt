@@ -53,7 +53,8 @@ fun NowScreen(
     onSpin: () -> Unit,
 ) {
     val s = vm.state
-    val playing = s.games.filter { it.status == "playing" }
+    // The game you most recently started at the top.
+    val playing = nowOrder(s.games.filter { it.status == "playing" })
     // Every platform, and what you're playing on each.
     val matcher = remember(s.platforms) { Platforms.Matcher(s.platforms) }
     val onPlatform = remember(playing, matcher, s.devices) {

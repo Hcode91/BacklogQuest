@@ -66,6 +66,8 @@ data class Game(
     val beatenAt: String = "",
     val addedAt: String = "",
     val order: Long = 0,
+    /** When it was last set to Playing (ms since 1970); 0 if before this was kept. Orders the Now tab. */
+    val playingSince: Long = 0,
     /** A web address or a file on the phone. Empty means use the cartridge label. */
     val cover: String = "",
     /** The system the game is for (e.g. PS2), when that's not the device you play it on. Empty = same. */

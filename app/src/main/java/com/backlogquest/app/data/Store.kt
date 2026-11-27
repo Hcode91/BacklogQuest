@@ -177,6 +177,7 @@ object Store {
         put("genre", g.genre); put("series", g.series); put("desc", g.desc)
         put("est", g.est); put("estSource", g.estSource); put("hours", g.hours)
         put("beatenAt", g.beatenAt); put("addedAt", g.addedAt); put("order", g.order)
+        put("playingSince", g.playingSince)
         put("cover", g.cover); put("platform", g.platform); put("source", g.source)
         put("achSource", g.achSource); put("histKey", g.histKey)
         put("screenshots", JSONArray().apply { g.screenshots.forEach { put(it) } })
@@ -220,6 +221,7 @@ object Store {
                 beatenAt = o.str("beatenAt"),
                 addedAt = o.str("addedAt"),
                 order = if (o.has("order") && !o.isNull("order")) o.optLong("order", 0L) else 0L,
+                playingSince = if (o.has("playingSince") && !o.isNull("playingSince")) o.optLong("playingSince", 0L) else 0L,
                 cover = o.str("cover"),
                 platform = o.str("platform"),
                 source = o.str("source"),
